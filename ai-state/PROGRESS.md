@@ -2,7 +2,6 @@
 
 ## Currently in flight
 **RESUMED 2026-09-26** (paused ~05:10 for stakeholder quota).
-- #11 O6 → PR #21: runtime PASS (Drivetime 20 eps back to 31 Aug, synthesised oldest plays with O4 track metadata, just-aired Saturday Jazz, cold ~8 s); review REQUEST_CHANGES (major: closure/timer leak per cold open; minor: FIFO starvation) → fix agent running.
 - #22 filed (follow-up, S): fetch show page + episodes concurrently in `_programMenu` (serial path only for shows without line-up artwork; not blocking v1.0).
 - #3 F3: implementation dispatched (docs, smoke.sh, CHANGELOG, release-commit authorship, Tracklist quiet 400).
 - Next: F2 review + runtime verify; merge L1 → dispatch L2; merge O3 → dispatch O4, O6; release v0.1.0 after F2.
@@ -23,6 +22,7 @@
 | O6 | #11 | ondemand | M | #6, #7 (soft #8) |
 
 ## Last 5 completions
+- 2026-09-26 — #11 O6 merged (PR #21, squash 3d3274f): runtime PASS; review REQUEST_CHANGES → fixed (closure/timer + waiter cycles broken, waiter-first pump). All ondemand tasks done.
 - 2026-09-26 — #9 O4 merged (PR #20, squash 240dc05): runtime PASS; review REQUEST_CHANGES → fixed (track list kept on song for whole stream; polls no longer cancel boundary notifications; onStream position from seekdata; notify only on track change).
 - 2026-09-26 — #5 L2 merged (PR #18, squash f8f34ef): review REQUEST_CHANGES → fixed (no re-push churn with stream2 queued; polls recover), title-callback approved; runtime PASS (show name/artwork/slot/next in Now Playing, never blank, Show info, light polling, ondemand + other stations unaffected). Live stream complete.
 - 2026-09-26 — #10 O5 merged (PR #19, squash edbaef3): review APPROVE (orchestrator merged main, fixed t/38 for O3's link rows, added 768w + sort tests), runtime PASS (46-show line-up with artwork, program header; cold Programs load 5.6 s).
