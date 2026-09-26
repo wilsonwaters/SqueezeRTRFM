@@ -14,14 +14,23 @@ package Plugins::RTRFM::Plugin;
 #       $cb->(\@items) exactly once, synchronously or later, even on error. The top-level menu
 #       is Live's items followed by OnDemand's. A hook that dies or calls back with anything but
 #       an array ref contributes a single error text item instead; a second call back is ignored.
+#       A hook that has not called back within HOOK_TIMEOUT (25) seconds also contributes a
+#       single error text item, so the menu still loads; its late call back is ignored.
 
 use strict;
 use warnings;
 
 use base qw(Slim::Plugin::OPMLBased);
 
+use Time::HiRes ();
+
 use Slim::Utils::Log;
 use Slim::Utils::Strings qw(cstring);
+use Slim::Utils::Timers;
+
+# Seconds to wait for the hooks before answering the top-level menu without the missing ones.
+# Must stay below the 35 s timeout Slim::Control::XMLBrowser gives a feed.
+use constant HOOK_TIMEOUT => 25;
 
 my $log = Slim::Utils::Log->addLogCategory( {
 	category     => 'plugin.rtrfm',
@@ -58,12 +67,27 @@ sub getDisplayName { 'PLUGIN_RTRFM' }
 sub playerMenu { 'RADIO' }
 
 # Top-level feed: ask every hook for its items (all requests start at once), wait for all of
-# them, then call $cb once with the items in hook order.
+# them (at most HOOK_TIMEOUT seconds), then call $cb once with the items in hook order.
+# $cb is never called from inside a hook call, so an error in $cb is not blamed on a hook.
 sub toplevel {
 	my ( $client, $cb, $args ) = @_;
 
 	my @results;
-	my $pending = scalar @HOOKS;
+	my $pending     = scalar @HOOKS;
+	my $dispatching = 1;    # still inside the loop that calls the hooks
+	my $done        = 0;    # $cb has been called
+	my $timer;
+
+	my $finish = sub {
+		return if $done++;
+
+		if ($timer) {
+			Slim::Utils::Timers::killSpecific($timer);
+			undef $timer;
+		}
+
+		$cb->( { items => [ map { @$_ } @results ] } );
+	};
 
 	for my $i ( 0 .. $#HOOKS ) {
 		my $hook   = $HOOKS[$i];
@@ -77,6 +101,11 @@ sub toplevel {
 				return;
 			}
 
+			if ($done) {
+				$log->warn( "$hook->menuItems called back after the " . HOOK_TIMEOUT . ' s timeout; ignoring it' );
+				return;
+			}
+
 			if ( ref $items ne 'ARRAY' ) {
 				$log->error( "$hook->menuItems called back with " . ( defined $items ? ( ref $items || 'a scalar' ) : 'undef' ) . ' instead of an array ref' );
 				$items = [ _errorItem($client) ];
@@ -84,9 +113,7 @@ sub toplevel {
 
 			$results[$i] = $items;
 
-			if ( --$pending == 0 ) {
-				$cb->( { items => [ map { @$_ } @results ] } );
-			}
+			$finish->() if --$pending == 0 && !$dispatching;
 		};
 
 		eval {
@@ -98,6 +125,24 @@ sub toplevel {
 			$hookCb->( [ _errorItem($client) ] ) unless $called;
 		};
 	}
+
+	$dispatching = 0;
+
+	if ( $pending == 0 ) {
+		$finish->();
+		return;
+	}
+
+	$timer = Slim::Utils::Timers::setTimer( undef, Time::HiRes::time() + HOOK_TIMEOUT, sub {
+		undef $timer;
+
+		for my $i ( grep { !$results[$_] } 0 .. $#HOOKS ) {
+			$log->error( "$HOOKS[$i]->menuItems did not call back within " . HOOK_TIMEOUT . ' s' );
+			$results[$i] = [ _errorItem($client) ];
+		}
+
+		$finish->();
+	} );
 
 	return;
 }

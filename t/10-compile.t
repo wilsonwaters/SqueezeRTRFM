@@ -1,5 +1,6 @@
 #!/usr/bin/perl
-# Every plugin module (RTRFM/**/*.pm) compiles and loads against the t/lib Slim:: stubs.
+# Every plugin module (RTRFM/**/*.pm) compiles and loads against the t/lib Slim:: stubs, and
+# stubs whose behaviour matters match LMS (Slim::Player::Playlist::url).
 
 use strict;
 use warnings;
@@ -8,6 +9,8 @@ use RTRFMTest;
 use Test::More;
 
 use File::Find;
+
+use Slim::Player::Playlist;
 
 my @modules;
 find( { no_chdir => 1, wanted => sub { push @modules, $File::Find::name if /\.pm$/ } }, 'RTRFM' );
@@ -35,4 +38,25 @@ for my $file (@modules) {
 isa_ok( 'Plugins::RTRFM::Plugin',          'Slim::Plugin::OPMLBased' );
 isa_ok( 'Plugins::RTRFM::ProtocolHandler', 'Slim::Player::Protocols::HTTPS' );
 
+subtest 'Slim::Player::Playlist stub: url() returns $track->url for track objects, like LMS' => sub {
+	Slim::Player::Playlist->reset;
+
+	my $track = bless { url => 'rtrfm://episode/saturdayjazz/2026-09-19' }, 'RTRFMTest::FakeTrack';
+	$Slim::Player::Playlist::PLAYLISTS{''} = [ 'https://example.test/a', $track ];
+
+	is( Slim::Player::Playlist::url( undef, 0 ), 'https://example.test/a', 'URL string entry: the string' );
+	is( Slim::Player::Playlist::url( undef, 1 ), 'rtrfm://episode/saturdayjazz/2026-09-19', 'track object entry: its url' );
+	is( Slim::Player::Playlist::track( undef, 1 ), $track, 'track() returns the object itself' );
+
+	$Slim::Player::Playlist::INDEX{''} = 1;
+	is( Slim::Player::Playlist::url(undef), 'rtrfm://episode/saturdayjazz/2026-09-19', 'default index: the playing song' );
+
+	Slim::Player::Playlist->reset;
+	is( Slim::Player::Playlist::url(undef), undef, 'empty playlist: undef' );
+};
+
 done_testing();
+
+package RTRFMTest::FakeTrack;
+
+sub url { $_[0]->{url} }

@@ -1,7 +1,8 @@
 #!/usr/bin/perl
 # Plugins::RTRFM::Plugin: registration (Radio menu, tag, display name, log category), the frozen
 # hook API (init order Live -> OnDemand; feed = Live items then OnDemand items, one callback),
-# and the failure handling: dying hooks, bad callback values, double callbacks.
+# and the failure handling: dying hooks, bad callback values, double callbacks, hooks that never
+# call back (timeout), and errors in the feed callback itself.
 
 use strict;
 use warnings;
@@ -26,7 +27,7 @@ my $ERROR_TEXT = string('PLUGIN_RTRFM_ERROR');
 my $ERROR_ITEM = { name => $ERROR_TEXT, type => 'text' };
 
 # Build the top-level feed with the given hook implementations (defaults: the real hooks).
-# Returns the collector that received the feed callback.
+# Returns the collector that received the feed callback (unless cb => \&code replaces it).
 sub feed {
 	my %impl = @_;
 
@@ -41,7 +42,7 @@ sub feed {
 	*Plugins::RTRFM::OnDemand::menuItems = $onDemand if $onDemand;
 
 	my $c = collector();
-	Plugins::RTRFM::Plugin::toplevel( undef, $c->cb, { params => {} } );
+	Plugins::RTRFM::Plugin::toplevel( undef, $impl{cb} || $c->cb, { params => {} } );
 	return $c;
 }
 
@@ -55,7 +56,12 @@ sub errors_logged {
 	return grep { $_->{level} eq 'ERROR' && $_->{category} eq 'plugin.rtrfm' } Slim::Utils::Log->messages;
 }
 
+sub warnings_logged {
+	return grep { $_->{level} eq 'WARN' && $_->{category} eq 'plugin.rtrfm' } Slim::Utils::Log->messages;
+}
+
 sub sync_hook  { my @items = @_; return sub { $_[2]->( [@items] ) } }
+sub never_hook { return sub { } }
 sub later_hook { my ( $delay, @items ) = @_; return sub { my $cb = $_[2]; Slim::Utils::Timers::setTimer( undef, time() + $delay, sub { $cb->( [@items] ) } ) } }
 
 ok( defined $ERROR_TEXT && length $ERROR_TEXT, 'PLUGIN_RTRFM_ERROR has text' );
@@ -244,6 +250,119 @@ subtest 'double callbacks are ignored' => sub {
 	is_deeply( items_of($c), [ $ERROR_ITEM, $C ], 'error item for the dead hook' );
 	advanceTime(2);
 	is( $c->count, 1, 'the late callback from the dead hook is ignored' );
+
+	clearTime();
+};
+
+my $T0      = 1_790_000_000;
+my $TIMEOUT = Plugins::RTRFM::Plugin::HOOK_TIMEOUT();
+
+subtest 'a hook that never calls back: error item after HOOK_TIMEOUT, the feed still returns' => sub {
+	is( $TIMEOUT, 25, 'HOOK_TIMEOUT is 25 s' );
+	cmp_ok( $TIMEOUT, '<', 35, 'below the 35 s XMLBrowser feed timeout' );
+
+	resetStubs();
+	setTime($T0);
+	my $c = feed( live => never_hook(), ondemand => sync_hook($C) );
+	is( $c->count, 0, 'Live silent: no callback yet' );
+	is_deeply( [ map { $_->when } Slim::Utils::Timers->pending ], [ $T0 + $TIMEOUT ], 'one timeout timer, HOOK_TIMEOUT from now' );
+	advanceTime( $TIMEOUT - 1 );
+	is( $c->count, 0, 'Live silent: still waiting 1 s before the timeout' );
+	advanceTime(1);
+	is( $c->count, 1, 'Live silent: callback once the timer fires' );
+	is_deeply( items_of($c), [ $ERROR_ITEM, $C ], 'Live silent: error item, then OnDemand items' );
+	ok( ( grep { $_->{message} =~ /Plugins::RTRFM::Live->menuItems did not call back within 25 s/ } errors_logged() ), 'timeout logged with the hook name' );
+	is( scalar Slim::Utils::Timers->pending, 0, 'no timers left' );
+
+	resetStubs();
+	$c = feed( live => sync_hook( $A, $B ), ondemand => never_hook() );
+	advanceTime($TIMEOUT);
+	is( $c->count, 1, 'OnDemand silent: callback once' );
+	is_deeply( items_of($c), [ $A, $B, $ERROR_ITEM ], 'OnDemand silent: live items, then error item' );
+
+	resetStubs();
+	$c = feed( live => never_hook(), ondemand => never_hook() );
+	advanceTime($TIMEOUT);
+	is( $c->count, 1, 'both silent: callback once' );
+	is_deeply( items_of($c), [ $ERROR_ITEM, $ERROR_ITEM ], 'both silent: one error item each' );
+	is( scalar errors_logged(), 2, 'both silent: one error per hook' );
+
+	resetStubs();
+	$c = feed( live => later_hook( 3, $A ), ondemand => never_hook() );
+	advanceTime(3);
+	is( $c->count, 0, 'Live answered, OnDemand silent: still waiting' );
+	advanceTime( $TIMEOUT - 3 );
+	is( $c->count, 1, 'Live answered, OnDemand silent: callback at the timeout' );
+	is_deeply( items_of($c), [ $A, $ERROR_ITEM ], 'Live answered, OnDemand silent: order kept' );
+
+	clearTime();
+};
+
+subtest 'an answer after the timeout is ignored' => sub {
+	resetStubs();
+	setTime($T0);
+
+	my $c = feed( live => later_hook( $TIMEOUT + 5, $A ), ondemand => sync_hook($C) );
+	advanceTime($TIMEOUT);
+	is( $c->count, 1, 'feed answered at the timeout' );
+	is_deeply( items_of($c), [ $ERROR_ITEM, $C ], 'error item for the slow hook' );
+
+	advanceTime(5);
+	is( $c->count, 1, 'late answer: still one callback' );
+	is_deeply( items_of($c), [ $ERROR_ITEM, $C ], 'late answer: items unchanged' );
+	ok( ( grep { $_->{message} =~ /Plugins::RTRFM::Live->menuItems called back after the 25 s timeout/ } warnings_logged() ), 'late answer: warning logged' );
+
+	resetStubs();
+	$c = feed( live => sync_hook($A), ondemand => sub { my $cb = $_[2]; Slim::Utils::Timers::setTimer( undef, time() + $TIMEOUT + 1, sub { $cb->( [$B] ); $cb->( [$C] ) } ) } );
+	advanceTime( $TIMEOUT + 1 );
+	is( $c->count, 1, 'late answer given twice: still one callback' );
+	is_deeply( items_of($c), [ $A, $ERROR_ITEM ], 'late answer given twice: items unchanged' );
+
+	clearTime();
+};
+
+subtest 'the timeout timer is cleared when every hook answers in time' => sub {
+	resetStubs();
+	setTime($T0);
+
+	my $c = feed( live => sync_hook($A), ondemand => sync_hook($C) );
+	is( $c->count, 1, 'synchronous answers: callback at once' );
+	is( scalar Slim::Utils::Timers->pending, 0, 'synchronous answers: no timer set' );
+
+	$c = feed( live => later_hook( 2, $A ), ondemand => later_hook( 3, $C ) );
+	is( scalar( grep { $_->when == $T0 + $TIMEOUT } Slim::Utils::Timers->pending ), 1, 'asynchronous answers: timeout timer pending' );
+	advanceTime(3);
+	is( $c->count, 1, 'asynchronous answers: callback once both answered' );
+	is_deeply( items_of($c), [ $A, $C ], 'asynchronous answers: order kept' );
+	is( scalar Slim::Utils::Timers->pending, 0, 'asynchronous answers: timeout timer killed' );
+
+	advanceTime( $TIMEOUT * 2 );
+	is( $c->count, 1, 'nothing fires later' );
+	is( scalar errors_logged(), 0, 'no errors logged' );
+
+	clearTime();
+};
+
+subtest 'an error in the feed callback is not blamed on a hook' => sub {
+	resetStubs();
+
+	my $calls = 0;
+	my $dyingCb = sub { $calls++; die "feed callback broke\n" };
+
+	ok( !eval { feed( live => sync_hook($A), ondemand => sync_hook($C), cb => $dyingCb ); 1 }, 'synchronous hooks: the error reaches the caller' );
+	like( $@, qr/feed callback broke/, 'synchronous hooks: with its message' );
+	is( $calls, 1, 'synchronous hooks: callback called once' );
+	is( scalar errors_logged(), 0, 'synchronous hooks: no hook failure logged' );
+
+	resetStubs();
+	setTime($T0);
+	$calls = 0;
+	feed( live => later_hook( 1, $A ), ondemand => sync_hook($C), cb => $dyingCb );
+	ok( !eval { advanceTime(1); 1 }, 'asynchronous hook: the error reaches the caller of the hook callback' );
+	like( $@, qr/feed callback broke/, 'asynchronous hook: with its message' );
+	is( $calls, 1, 'asynchronous hook: callback called once' );
+	is( scalar errors_logged(), 0, 'asynchronous hook: no hook failure logged' );
+	is( scalar Slim::Utils::Timers->pending, 0, 'asynchronous hook: timeout timer killed' );
 
 	clearTime();
 };

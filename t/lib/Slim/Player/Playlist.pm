@@ -1,12 +1,16 @@
 package Slim::Player::Playlist;
 
 # Test stub for LMS Slim::Player::Playlist.
-# Real API: url($client, $index) returns the URL of the track at $index (default: the playing
-# song); track($client, $index) returns the track object (here: the URL); count($client).
-# Tests set %PLAYLISTS{$clientId} = [ urls ] and optionally %INDEX{$clientId}.
+# Real API: track($client, $index) returns the playlist entry at $index (default: the playing
+# song), a track object or a URL string; url($client, $index) returns that entry's URL:
+# $track->url for a track object, else the string itself; count($client).
+# Tests set %PLAYLISTS{$clientId} = [ URLs and/or objects with a url method ] and optionally
+# %INDEX{$clientId}.
 
 use strict;
 use warnings;
+
+use Scalar::Util qw(blessed);
 
 our %PLAYLISTS;
 our %INDEX;
@@ -23,7 +27,10 @@ sub track {
 	return ( $PLAYLISTS{$id} || [] )->[$index];
 }
 
-sub url { track(@_) }
+sub url {
+	my $objOrUrl = track(@_);
+	return blessed($objOrUrl) && $objOrUrl->can('url') ? $objOrUrl->url : $objOrUrl;
+}
 
 # test helper
 sub reset { %PLAYLISTS = (); %INDEX = (); return }
