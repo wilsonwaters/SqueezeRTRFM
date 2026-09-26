@@ -147,10 +147,14 @@ stop_lms() { stop_pidfile "$LMS_PIDFILE" LMS 30; }
 start_player() {
   if pid_alive "$SQZ_PIDFILE"; then log "squeezelite already running (pid $(cat "$SQZ_PIDFILE"))"; return 0; fi
   log "starting squeezelite '$PLAYER_NAME' ($PLAYER_MAC), paced PCM -> /dev/null"
-  # -o - : PCM to stdout (no sound card here); -r/-R : always resample to a fixed rate so
-  # pv can throttle to real time; -a 16 : 16-bit LE. proxychains lets direct streaming work.
+  # -o -      : PCM to stdout (there is no sound card); -a 16 : 16-bit little-endian
+  # -r R-R -u mX : output ONLY rate R, async-resampling everything to it, so pv can
+  #              throttle the pipe to exactly real time (R * 2ch * 2 bytes per second)
+  # -Z 192000  : still advertise a realistic max rate to LMS (else LMS rejects 48kHz streams)
+  # proxychains: lets squeezelite fetch directly-streamed URLs (LMS's default) too.
   setsid nohup bash -c "proxychains4 -q -f '$PROXYCHAINS_CONF' squeezelite \
-      -n '$PLAYER_NAME' -m '$PLAYER_MAC' -s 127.0.0.1 -o - -a 16 -r $PLAYER_PCM_RATE -R \
+      -n '$PLAYER_NAME' -m '$PLAYER_MAC' -s 127.0.0.1 -o - -a 16 \
+      -r $PLAYER_PCM_RATE-$PLAYER_PCM_RATE -u mX -Z 192000 \
       -d all=info -f '$LOG_DIR/squeezelite.log' | pv -q -L $PLAYER_BYTES_PER_SEC >/dev/null" \
     >>"$LOG_DIR/squeezelite.log" 2>&1 </dev/null &
   echo $! >"$SQZ_PIDFILE"
