@@ -1,7 +1,7 @@
 # Project Progress
 
 ## Currently in flight
-- #1 F1 skeleton — PR #12 open (CI green, impl runtime check passed); independent review + runtime verification agents running.
+- Wave 1 implementation agents (parallel worktrees): #2 F2 `feat/F2-packaging`, #4 L1 `feat/L1-live-menu`, #6 O1 `feat/O1-playback`, #7 O2 `feat/O2-browse`.
 
 ## Issue map
 | Task | Issue | Stream | Size | Depends on |
@@ -19,6 +19,7 @@
 | O6 | #11 | ondemand | M | #6, #7 (soft #8) |
 
 ## Last 5 completions
+- 2026-09-26 — #1 F1 merged (PR #12, squash a8c59ba): review APPROVE (4 minor findings fixed pre-merge: anchored URL validation, 25 s hook timeout, $cb outside eval, Playlist stub), runtime PASS (stream1 plays via JSON-RPC and web UI).
 - 2026-09-26 — All 11 task specs published to issues #1–#11; master-plan changelogs updated with spec refinements.
 - 2026-09-26 — Streams + master plans accepted (`ai-state/streams.md`, `ai-state/streams/*/master-plan.md`); 11 issues filed.
 - 2026-09-26 — Local LMS 9.1.1 + squeezelite test bed ready (`ai-state/RUNBOOK.md`); RTRFM stream1 (HE-AAC) plays on DevPlayer; test-bed lock added.
@@ -27,9 +28,9 @@
 - 2026-09-26 — Brief written (`ai-state/brief.md`).
 
 ## Next 3 to dispatch (in order)
-- Review agent for F1 PR once opened
-- Wave 1 in parallel after F1 merges: #2 F2, #4 L1, #6 O1, #7 O2
-- Wave 2: #5 L2, #8 O3, #10 O5
+- Review + runtime verification for each wave-1 PR as it opens
+- IC-1 (O1+O2 browse→play) after both merge; release v0.1.0 via workflow after F2 merges
+- Wave 2: #5 L2 (after #4), #8 O3 + #10 O5 (after #7)
 
 ## Active blockers
 - None. (pi14 unreachable from container — final acceptance by stakeholder; see OPEN-QUESTIONS §2.)
