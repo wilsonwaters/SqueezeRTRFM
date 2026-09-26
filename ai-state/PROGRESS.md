@@ -1,7 +1,7 @@
 # Project Progress
 
 ## Currently in flight
-- Wave 1 implementation agents (parallel worktrees): #2 F2 `feat/F2-packaging`, #4 L1 `feat/L1-live-menu`, #6 O1 → PR #13 (under review + runtime verification), #7 O2 → PR #14 (under review; runtime verifier also running IC-1 on a local O1+O2 combination).
+- Wave 1 implementation agents (parallel worktrees): #2 F2 `feat/F2-packaging`, #4 L1 → PR #16 (under review + runtime verification), #6 O1 → PR #13 (review APPROVE; fixing minor leak in scan callback + cover(0) nit; runtime verification running), #7 O2 → PR #14 (under review; runtime verifier also running IC-1 on a local O1+O2 combination).
 
 ## Issue map
 | Task | Issue | Stream | Size | Depends on |
