@@ -20,7 +20,8 @@ _(none yet)_
    deleting remote branches is refused, and the GitHub MCP has no "create release" tool. Releases must therefore
    be cut by a GitHub Actions workflow (workflow_dispatch or version-bump trigger) using `GITHUB_TOKEN`.
    A probe branch `feat/push-probe` (identical to `main` at 71a09c1) could not be deleted — stakeholder can
-   delete it in the GitHub UI.
+   delete it in the GitHub UI. Likewise `evidence/O1-playback` (a screenshot-only branch pushed during O1) — safe to
+   delete. Agents are now told not to push non-feature branches; merged `feat/*` branches also accumulate for the same reason.
 5. **Commit authorship** (2026-09-26, stakeholder instruction) — All commits, PRs and issues are authored as
    Wilson Waters <wilsonwaters@users.noreply.github.com> with no tool/vendor attribution trailers or footers.
    The first 11 commits on `main` after the initial commit (71a09c1 … 0701d66) were made under a different author
