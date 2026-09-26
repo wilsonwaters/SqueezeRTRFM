@@ -5,7 +5,9 @@
 #   3. xmllint --noout RTRFM/install.xml (and repo.xml once it exists)
 #   4. strings lint (scripts/lint-strings.pl)
 # Runs every step, prints a summary and exits non-zero if any step failed.
-# Needs perl (core modules only), prove and xmllint (Debian/Ubuntu: libxml2-utils).
+# Needs perl with URI::Escape (Debian/Ubuntu: liburi-perl), prove and xmllint (libxml2-utils).
+# Other LMS-bundled modules are shimmed in t/lib; HTML::Entities (libhtml-parser-perl) is
+# optional: without it the tests only exercise the built-in entity decoder.
 set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
