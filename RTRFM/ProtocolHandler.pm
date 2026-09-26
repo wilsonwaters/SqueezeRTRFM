@@ -20,22 +20,32 @@ package Plugins::RTRFM::ProtocolHandler;
 #     the episode metadata cache (Util::getEpisodeMeta, written by the menus) or the URL.
 #
 # The current track during episode playback (position-based metadata):
-#   - onStream (every stream start, including each seek, which re-opens the stream) makes sure
-#     the episode's track list is cached (at most one Tracklist::fetch; none when cached) and
-#     (re)arms the boundary timer. The episode start comes from the metadata cache, else from
-#     the URL's date and HHMM; without either there is no track data.
-#   - getMetadataFor, for the episode the player is playing and with a cached track list,
-#     returns the track at the audible position (Slim::Player::Source::songTime) from
-#     Tracklist::trackAt: title and artist of the track, album "<Show> – <date>", the episode
-#     cover and the *episode* duration. Otherwise (no client, a queued episode, no track list,
-#     before the first track) it returns the episode metadata. While playing it also (re)arms
-#     the boundary timer. It stays cheap: no network, one track-list cache read, and it keeps
-#     the pending timer when the due time is unchanged.
+#   - The episode's track list is kept on the song ($song->pluginData) for the whole stream:
+#     the cached copy can expire mid-episode (1 hour for an episode that aired less than 2 days
+#     ago, counted from the first fetch, which may have been a menu browse). onStream (every
+#     stream start, including each seek, which re-opens the stream) puts it there from the
+#     cache, or starts the song's one Tracklist::fetch. The episode start comes from the
+#     metadata cache, else from the URL's date and HHMM; without either there is no track data.
+#     onStream arms the boundary timer only for the song the player is playing (not when LMS
+#     starts streaming the next playlist item early), from the position the stream starts at
+#     ($song->seekdata): it runs before the player restarts, while songTime is still the old
+#     stream's.
+#   - getMetadataFor, for the episode the player is playing and once its track list is known
+#     (the song's, else the cache's), returns the track at the audible position
+#     (Slim::Player::Source::songTime) from Tracklist::trackAt: title and artist of the track,
+#     album "<Show> – <date>", the episode cover and the *episode* duration. Otherwise (no
+#     client, a queued episode, no track list, before the first track) it returns the episode
+#     metadata. While playing it also (re)arms the boundary timer, and if neither the song nor
+#     the cache has the list it starts the song's one fetch (never more than one per song,
+#     onStream's included, whatever the outcome). It stays cheap: never blocks, no cache read
+#     once the song has the list, and it keeps the pending timer when the due time is
+#     unchanged or the timer is about to fire (it may be the one for the boundary just passed).
 #   - One boundary timer per master player (sync slaves use their master's) fires 0.5 s after
-#     the next track starts: it bumps currentPlaylistUpdateTime and sends 'newmetadata' so
-#     the web UI and other controllers refresh, then arms itself for the following track. It
-#     stops when the player stops or moves to another URL, re-checks every 5 s while paused,
-#     and isn't set after the last track. onStop kills it.
+#     the next track starts: if the current track changed since the timer was armed it bumps
+#     currentPlaylistUpdateTime and sends 'newmetadata' so the web UI and other controllers
+#     refresh, then it arms itself for the following track. It stops when the player stops or
+#     moves to another URL, re-checks every 5 s while paused, and isn't set after the last
+#     track. onStop kills it.
 #   - getCurrentTitle gives LMS's current title (status current_title, player displays) the
 #     same title as getMetadataFor, per player. Without it LMS would show whatever title it
 #     cached for the URL before the scan: empty, or the name of the menu item that started
@@ -68,7 +78,7 @@ use warnings;
 
 use base qw(Slim::Player::Protocols::HTTPS);
 
-use Scalar::Util qw(blessed);
+use Scalar::Util qw(blessed refaddr);
 use Time::HiRes;
 
 use Slim::Control::Request;
@@ -85,6 +95,11 @@ use Plugins::RTRFM::Util;
 use constant BOUNDARY_DELAY => 0.5;     # seconds after a track starts that its timer fires
 use constant PAUSE_RECHECK  => 5;       # seconds between checks while paused
 use constant KEEP_TIMER     => 0.5;     # a pending timer due within this of the new time is kept
+use constant LOST_TIMER     => 5;       # a pending timer overdue by this much is taken as lost
+
+# $song->pluginData keys (not namespaced by LMS, hence the prefix)
+use constant SONG_TRACKS  => 'rtrfmTracks';         # the episode's track list, for the whole stream
+use constant SONG_FETCHED => 'rtrfmTracksFetched';  # the song's one track-list fetch was started
 
 use constant ENDASH => "\x{2013}";
 
@@ -169,16 +184,17 @@ sub getMetadataFor {
 	my $cached  = Plugins::RTRFM::Util::getEpisodeMeta( $episode->{slug}, $episode->{date} );
 	my $meta    = _episodeMeta( $episode, $cached );
 
-	# the current track: only for the episode this player is playing, with a cached track list
-	my $master = _playingMaster( $client, $url ) or return $meta;
-	my $tracks = _cachedTracks( $episode, $cached ) or return $meta;
+	# the current track: only for the episode this player is playing, once its track list is known
+	my ( $master, $song ) = _playingSong( $client, $url ) or return $meta;
+	my $playing = $master->isPlaying;
+	my $tracks  = _songTracks( $master, $song, $url, $episode, $cached, $playing ) or return $meta;
 
 	my $pos = _position($master);
 	my ( $current, $next ) = Plugins::RTRFM::Tracklist::trackAt( $tracks, $pos );
 
 	# while paused or stopped the pending timer is left alone: it re-checks every few seconds
 	# while paused, and ends itself once stopped
-	_arm( $master, $url, $next, $pos ) if $master->isPlaying;
+	_arm( $master, $url, $current, $next, $pos ) if $playing;
 
 	return $meta unless $current;
 
@@ -239,33 +255,24 @@ sub onStream {
 	my $url     = $song->currentTrack->url;
 	my $episode = Plugins::RTRFM::Util::parseEpisodeUrl($url) or return;
 	my $cached  = Plugins::RTRFM::Util::getEpisodeMeta( $episode->{slug}, $episode->{date} );
-	my $start   = _episodeStart( $episode, $cached );
 
-	if ( !defined $start ) {
+	if ( !defined _episodeStart( $episode, $cached ) ) {
 		main::INFOLOG && $log->is_info && $log->info("No start time for $url, so no current track");
 		return;
 	}
 
-	if ( my $tracks = Plugins::RTRFM::Tracklist::cached( $episode->{slug}, $start ) ) {
-		return _armFor( $master, $url, $tracks );
-	}
+	# the song's list, else the cached one, else the song's one fetch (which arms the timer when
+	# it completes)
+	my $tracks = _songTracks( $master, $song, $url, $episode, $cached, 1 ) or return;
 
-	Plugins::RTRFM::Tracklist::fetch( $episode->{slug}, $start, sub {
-		my ( $tracks, $error ) = @_;
+	# LMS starts streaming the next playlist item while the current one is still playing: the
+	# timer stays the playing song's (getMetadataFor arms the next one's once it plays)
+	return unless _isSong( $master->playingSong, $song );
 
-		if ( !$tracks ) {
-			main::INFOLOG && $log->is_info && $log->info( "No track list for $url: " . ( $error || 'unknown error' ) );
-			return;
-		}
-
-		# only if the player is still on this episode
-		return if $master->isStopped || ( Slim::Player::Playlist::url($master) || '' ) ne $url;
-
-		$master->currentPlaylistUpdateTime( Time::HiRes::time() );
-		Slim::Control::Request::notifyFromArray( $master, ['newmetadata'] );
-
-		_armFor( $master, $url, $tracks );
-	} );
+	# the player hasn't restarted yet, so songTime is still the old stream's (0 on direct
+	# streams after a seek: Song::open resets startOffset); the stream starts at the seek target
+	my $seek = $song->seekdata;
+	_armFor( $master, $url, $tracks, ref $seek && $seek->{timeOffset} ? $seek->{timeOffset} : 0 );
 
 	return;
 }
@@ -283,40 +290,48 @@ sub onStop {
 # Boundary timer
 # ---------------------------------------------------------------------------
 
-# Arm the timer for the next track boundary after the current position.
+# Arm the timer for the next track boundary after position $pos.
 sub _armFor {
-	my ( $master, $url, $tracks ) = @_;
+	my ( $master, $url, $tracks, $pos ) = @_;
 
-	my $pos = _position($master);
-	my ( undef, $next ) = Plugins::RTRFM::Tracklist::trackAt( $tracks, $pos );
+	my ( $current, $next ) = Plugins::RTRFM::Tracklist::trackAt( $tracks, $pos );
 
-	_arm( $master, $url, $next, $pos );
+	_arm( $master, $url, $current, $next, $pos );
 }
 
 # Arm (or keep) the one timer of $master for the start of track $next, $next->{offset} - $pos
-# seconds from now. No next track: no timer.
+# seconds from now; $current is the track at $pos. No next track: no timer.
 sub _arm {
-	my ( $master, $url, $next, $pos ) = @_;
+	my ( $master, $url, $current, $next, $pos ) = @_;
+
+	my $now   = Time::HiRes::time();
+	my $armed = $master->pluginData('boundary');
+	$armed = undef unless ref $armed && $armed->{url} eq $url;
+
+	# keep a pending timer that is about to fire: it may be the one for the boundary that was
+	# just passed, which it has yet to announce (a status poll can land in between); it re-arms
+	# itself when it fires
+	return if $armed && $armed->{due} - $now <= BOUNDARY_DELAY && $now - $armed->{due} < LOST_TIMER;
 
 	return _disarm($master) unless $next;
 
-	my $due = Time::HiRes::time() + ( $next->{offset} - $pos ) + BOUNDARY_DELAY;
+	my $due = $now + ( $next->{offset} - $pos ) + BOUNDARY_DELAY;
 
 	# keep the pending timer when it's due at (almost) the same time: getMetadataFor runs on
 	# every status poll
-	my $armed = $master->pluginData('boundary');
-	return if ref $armed && $armed->{url} eq $url && abs( $armed->{due} - $due ) < KEEP_TIMER;
+	return if $armed && abs( $armed->{due} - $due ) < KEEP_TIMER;
 
-	_setTimer( $master, $url, $due );
+	_setTimer( $master, $url, $due, _trackKey($current) );
 }
 
+# $from: _trackKey of the track that was current when the timer was armed
 sub _setTimer {
-	my ( $master, $url, $due ) = @_;
+	my ( $master, $url, $due, $from ) = @_;
 
 	Slim::Utils::Timers::killTimers( $master, \&_onBoundary );
 	Slim::Utils::Timers::setTimer( $master, $due, \&_onBoundary, $url );
 
-	$master->pluginData( boundary => { url => $url, due => $due } );
+	$master->pluginData( boundary => { url => $url, due => $due, from => $from } );
 }
 
 sub _disarm {
@@ -331,24 +346,94 @@ sub _disarm {
 sub _onBoundary {
 	my ( $master, $url ) = @_;
 
+	my $armed = $master->pluginData('boundary');
+	my $from  = ref $armed ? $armed->{from} : undef;
 	$master->pluginData( boundary => 0 );
 
 	# the player stopped or moved on (another episode, another stream): done
 	return if $master->isStopped || ( Slim::Player::Playlist::url($master) || '' ) ne $url;
 
 	if ( $master->isPaused ) {
-		return _setTimer( $master, $url, Time::HiRes::time() + PAUSE_RECHECK );
+		return _setTimer( $master, $url, Time::HiRes::time() + PAUSE_RECHECK, $from );
 	}
 
-	# the web UI refreshes on currentPlaylistUpdateTime, other controllers on newmetadata;
-	# both then ask getMetadataFor for the new track
-	$master->currentPlaylistUpdateTime( Time::HiRes::time() );
-	Slim::Control::Request::notifyFromArray( $master, ['newmetadata'] );
-
+	my ( undef, $song ) = _playingSong( $master, $url ) or return;
 	my $episode = Plugins::RTRFM::Util::parseEpisodeUrl($url) or return;
-	my $tracks  = _cachedTracks( $episode, Plugins::RTRFM::Util::getEpisodeMeta( $episode->{slug}, $episode->{date} ) ) or return;
+	my $cached  = Plugins::RTRFM::Util::getEpisodeMeta( $episode->{slug}, $episode->{date} );
+	my $tracks  = _songTracks( $master, $song, $url, $episode, $cached, 1 ) or return;
 
-	_armFor( $master, $url, $tracks );
+	my $pos = _position($master);
+	my ( $current, $next ) = Plugins::RTRFM::Tracklist::trackAt( $tracks, $pos );
+
+	# only when the track changed: not when the timer fired early (the player was behind) or
+	# re-checked after a pause with the same track still playing. The web UI refreshes on
+	# currentPlaylistUpdateTime, other controllers on newmetadata; both then ask getMetadataFor
+	# for the new track
+	if ( !defined $from || $from ne _trackKey($current) ) {
+		$master->currentPlaylistUpdateTime( Time::HiRes::time() );
+		Slim::Control::Request::notifyFromArray( $master, ['newmetadata'] );
+	}
+
+	_arm( $master, $url, $current, $next, $pos );
+}
+
+# ---------------------------------------------------------------------------
+# The song's track list
+# ---------------------------------------------------------------------------
+
+# The track list of $song, the episode $episode at $url that $master is playing: the one kept
+# on the song, else the cached one (then kept on the song). Else, with $fetch, the song's one
+# fetch is started (_fetchTracks). undef while there is none.
+sub _songTracks {
+	my ( $master, $song, $url, $episode, $cached, $fetch ) = @_;
+
+	my $tracks = $song->pluginData(SONG_TRACKS);
+	return $tracks if ref $tracks eq 'ARRAY';
+
+	my $start = _episodeStart( $episode, $cached );
+	return undef unless defined $start;
+
+	if ( $tracks = Plugins::RTRFM::Tracklist::cached( $episode->{slug}, $start ) ) {
+		$song->pluginData( SONG_TRACKS, $tracks );
+		return $tracks;
+	}
+
+	_fetchTracks( $master, $song, $url, $episode, $start ) if $fetch;
+
+	return undef;
+}
+
+# At most one Tracklist::fetch per song, whatever the outcome (a failure isn't retried for that
+# song). The list is kept on the song; if the player is still playing it, controllers are told
+# and the timer is armed.
+sub _fetchTracks {
+	my ( $master, $song, $url, $episode, $start ) = @_;
+
+	return if $song->pluginData(SONG_FETCHED);
+	$song->pluginData( SONG_FETCHED, 1 );
+
+	Plugins::RTRFM::Tracklist::fetch( $episode->{slug}, $start, sub {
+		my ( $tracks, $error ) = @_;
+
+		if ( !$tracks ) {
+			main::INFOLOG && $log->is_info && $log->info( "No track list for $url: " . ( $error || 'unknown error' ) );
+			return;
+		}
+
+		$song->pluginData( SONG_TRACKS, $tracks );
+
+		# only if the player is still playing this song
+		return if $master->isStopped
+			|| ( Slim::Player::Playlist::url($master) || '' ) ne $url
+			|| !_isSong( $master->playingSong, $song );
+
+		$master->currentPlaylistUpdateTime( Time::HiRes::time() );
+		Slim::Control::Request::notifyFromArray( $master, ['newmetadata'] );
+
+		_armFor( $master, $url, $tracks, _position($master) );
+	} );
+
+	return;
 }
 
 # ---------------------------------------------------------------------------
@@ -407,31 +492,33 @@ sub trackInfoMenu {
 # Helpers
 # ---------------------------------------------------------------------------
 
-# The master of $client's sync group if it is playing $url, else undef.
-sub _playingMaster {
+# ($master, $song): the master of $client's sync group and its playing song, if that is $url;
+# else ().
+sub _playingSong {
 	my ( $client, $url ) = @_;
 
-	return undef unless blessed($client) && $client->can('master');
+	return () unless blessed($client) && $client->can('master');
 
-	my $master = $client->master     or return undef;
-	my $song   = $master->playingSong or return undef;
-	my $track  = $song->currentTrack or return undef;
+	my $master = $client->master     or return ();
+	my $song   = $master->playingSong or return ();
+	my $track  = $song->currentTrack or return ();
 
-	return $track->url eq $url ? $master : undef;
+	return $track->url eq $url ? ( $master, $song ) : ();
 }
+
+# Whether $x and $y are the same song object.
+sub _isSong {
+	my ( $x, $y ) = @_;
+	return ref $x && ref $y && refaddr($x) == refaddr($y);
+}
+
+# Identifies the current track for the "has it changed" check: its offset ('' for none).
+sub _trackKey { defined $_[0] ? $_[0]->{offset} : '' }
 
 # Audible position in the episode (seconds); undefined or negative -> 0.
 sub _position {
 	my $pos = Slim::Player::Source::songTime(shift);
 	return defined $pos && $pos > 0 ? $pos : 0;
-}
-
-# The episode's cached track list, or undef (no start time, or nothing cached).
-sub _cachedTracks {
-	my ( $episode, $cached ) = @_;
-
-	my $start = _episodeStart( $episode, $cached );
-	return defined $start ? Plugins::RTRFM::Tracklist::cached( $episode->{slug}, $start ) : undef;
 }
 
 # Episode start 'YYYY-MM-DD HH:MM:SS' (Perth): from the metadata cache, else the URL's date and

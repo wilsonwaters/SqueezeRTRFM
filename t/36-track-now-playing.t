@@ -1,8 +1,10 @@
 #!/usr/bin/perl
 # The current track during episode playback: Tracklist::trackAt/cached, and the protocol
 # handler's position-based metadata (getMetadataFor/getCurrentTitle), the one-per-player
-# boundary timer (arm, fire, pause re-check, stop/URL change, sync master), onStream fetching
-# the track list at most once, onStop, and the song-info (TrackInfo) provider.
+# boundary timer (arm, fire, pause re-check, stop/URL change, sync master, polls between a
+# boundary and its timer, notifying only on a track change), the track list kept on the song
+# for the whole stream (fetched at most once per song), onStream (stream start position,
+# next playlist item, sync slaves), onStop, and the song-info (TrackInfo) provider.
 # Uses F1's fake clock and timers, fake players/songs (below) and the Saturday Jazz
 # 2026-09-19 playlist fixture (see t/34-tracklist.t): tracks start at 09:03 (offset 180),
 # track 5 at 09:23 (1380), track 6 at 09:29 (1740), track 7 at 09:33 (1980), track 20 at
@@ -65,12 +67,12 @@ sub newmetadata      { grep { $_->{request}->[0] eq 'newmetadata' } notification
 sub timers           { Slim::Utils::Timers->pending }
 sub boundaryTimers   { grep { $_->{code} == \&Plugins::RTRFM::ProtocolHandler::_onBoundary } timers() }
 
-# A fresh test: stubs reset, clock at $T0, the episode metadata cache primed (unless
-# meta => 0) and the track list cached (unless tracks => 0).
+# A fresh test: stubs reset, clock at $T0 (or time => ...), the episode metadata cache primed
+# (unless meta => 0) and the track list cached (unless tracks => 0).
 sub fresh {
-	my %opts = ( meta => 1, tracks => 1, @_ );
+	my %opts = ( meta => 1, tracks => 1, time => $T0, @_ );
 	resetStubs();
-	setTime($T0);
+	setTime( $opts{time} );
 	setEpisodeMeta( {%META} ) if $opts{meta};
 	route( $PLAYLIST, file => 'ondemand/playlist-saturdayjazz-2026-09-19.json' );
 	if ( $opts{tracks} ) {
@@ -81,17 +83,38 @@ sub fresh {
 	return;
 }
 
-# A master player playing $url from position $pos (seconds): returns (player, song).
+# A master player playing $url from position $pos (seconds): returns (player, song). A stream
+# started at $pos > 0 was a seek, so the song's seekdata has it (as Slim::Player::Song).
 sub playing {
 	my ( $url, $pos, %opts ) = @_;
 	my $player = FakePlayer->new(%opts);
 	my $song   = FakeSong->new( $url, $player );
+	$song->{seekdata} = { timeOffset => $pos } if $pos;
 	$player->play( $song, $pos );
 	$Slim::Player::Playlist::PLAYLISTS{ $player->id } = [$url];
 	return ( $player, $song );
 }
 
 sub o1Meta { $PH->getMetadataFor( undef, $_[0] || $URL ) }
+
+# A seek of $player (playing $song) to $pos as StreamingController::_JumpToTime/_Stream do it:
+# the song's seekdata gets the target, then onStream runs *before* the player restarts, while
+# songTime is still not the new position (0 on direct streams: Song::open resets
+# startOffset); then the player plays from $pos.
+sub seekStream {
+	my ( $player, $song, $pos ) = @_;
+	$song->{seekdata} = { timeOffset => $pos };
+	$player->{elapsed} = 0;
+	$PH->onStream( $player, $song );
+	delete $player->{elapsed};
+	$player->seek($pos);
+}
+
+# The next fetch of the track list waits for completeDeferred (or never completes).
+sub deferFetch {
+	Slim::Networking::SimpleAsyncHTTP->reset;
+	route( $PLAYLIST, file => 'ondemand/playlist-saturdayjazz-2026-09-19.json', defer => 1 );
+}
 
 # ---------------------------------------------------------------------------
 # Tracklist::trackAt
@@ -312,6 +335,87 @@ subtest 'repeated calls keep one timer per player; a sync slave uses its master;
 	is( scalar( grep { $_->{obj} == $other } timers() ), 1, 'one for each player' );
 };
 
+subtest 'a status poll between a boundary and its timer does not cancel the notification' => sub {
+	fresh();
+	my ($player) = playing( $URL, 1390 );
+	$PH->getMetadataFor( $player, $URL );
+
+	advanceTime(350.2);    # pos 1740.2: track 6 has started, its timer is due in 0.3 s
+	is( $PH->getMetadataFor( $player, $URL )->{title}, 'Look to the Sky', 'poll right after the boundary: track 6' );
+	advanceTime(5);
+	is( scalar( newmetadata() ), 1, 'exactly one newmetadata for the boundary' );
+	ok( ( $player->currentPlaylistUpdateTime || 0 ) >= $T0 + 350.5, 'currentPlaylistUpdateTime set' );
+	my @timers = boundaryTimers();
+	is( scalar( timers() ), 1, 'one timer' );
+	is( $timers[0] && $timers[0]->{when}, $T0 + 355.2 + ( 1980 - 1745.2 ) + 0.5, 'then armed for track 7' );
+
+	# the last boundary: the poll finds no next track, the pending timer must survive that too
+	fresh();
+	($player) = playing( $URL, 6890 );
+	$PH->getMetadataFor( $player, $URL );
+	advanceTime(10.2);
+	is( $PH->getMetadataFor( $player, $URL )->{title}, 'Forest', 'poll right after the last boundary: track 20' );
+	advanceTime(5);
+	is( scalar( newmetadata() ), 1, 'the last boundary is announced' );
+	is( scalar( timers() ), 0, 'and no timer after it' );
+};
+
+subtest 'boundary timer notifies only when the track changed (early fire, re-check after a pause)' => sub {
+	# the player falls 2 s behind (a stall) after the timer was armed: the timer fires before
+	# the boundary is audible
+	fresh();
+	my ($player) = playing( $URL, 1390 );
+	$PH->getMetadataFor( $player, $URL );
+	advanceTime(100);
+	$player->pause;
+	advanceTime(2);
+	$player->resume;
+	is( advanceTime(248.5), 1, 'timer fired at +350.5 s, pos 1738.5' );
+	is( scalar( newmetadata() ), 0, 'still track 5: no newmetadata' );
+	is( $player->currentPlaylistUpdateTime, undef, 'update time untouched' );
+	is( ( boundaryTimers() )[0]->{when}, $T0 + 352.5, 're-armed for the boundary, 2 s later' );
+	advanceTime(2);
+	is( scalar( newmetadata() ), 1, 'then one newmetadata at the boundary' );
+
+	# paused at 1735, resumed without a poll: the 5 s re-check fires before the boundary
+	fresh();
+	($player) = playing( $URL, 1735 );
+	$PH->getMetadataFor( $player, $URL );
+	$player->pause;
+	advanceTime(5.5);    # fires paused: re-check at +10.5
+	advanceTime(3);
+	$player->resume;
+	is( advanceTime(2), 1, 're-check fired while playing, pos 1737' );
+	is( scalar( newmetadata() ), 0, 'still track 5: no newmetadata' );
+	is( ( boundaryTimers() )[0]->{when}, $T0 + 14, 'armed for the boundary (1740)' );
+	advanceTime(3.5);
+	is( scalar( newmetadata() ), 1, 'then one newmetadata at the boundary' );
+};
+
+subtest 'the track list is kept for the whole stream: the cached copy expiring mid-episode changes nothing' => sub {
+	# a day after the episode aired (2026-09-20 09:00 in Perth) the list is cached for 1 hour only
+	my $T1 = timegm( 0, 0, 1, 20, 8, 2026 );
+	fresh( time => $T1 );
+	my ( $player, $song ) = playing( $URL, 0 );
+	$PH->onStream( $player, $song );
+	is( ( boundaryTimers() )[0]->{when}, $T1 + 180.5, 'armed for the first track' );
+
+	# play on to pos 3700, status polls every 9.25 s
+	for ( 1 .. 400 ) {
+		advanceTime(9.25);
+		$PH->getMetadataFor( $player, $URL );
+	}
+	is( Plugins::RTRFM::Tracklist::cached( 'saturdayjazz', $START ), undef, 'the cached copy has expired' );
+	is( $PH->getMetadataFor( $player, $URL )->{title}, 'The Long and Winding Road', 'pos 3700: still the current track (track 11)' );
+	my @timers = boundaryTimers();
+	is( scalar( timers() ), 1, 'a timer is armed' );
+	is( $timers[0] && $timers[0]->{when}, $T1 + 3700 + ( 4020 - 3700 ) + 0.5, 'for track 12 (4020)' );
+	is( scalar( newmetadata() ), 11, 'every boundary so far announced' );
+	is( playlistRequests(), 0, 'no fetch' );
+	advanceTime(330);
+	is( scalar( newmetadata() ), 12, 'and the next one' );
+};
+
 subtest 'O1 episode metadata: before the first track, no track list, not playing, no client' => sub {
 	fresh();
 	my ( $player, $song ) = playing( $URL, 60 );
@@ -320,10 +424,24 @@ subtest 'O1 episode metadata: before the first track, no track list, not playing
 	is( ( boundaryTimers() )[0]->{when}, $T0 + 120.5, 'timer armed for the first track (180)' );
 
 	fresh( tracks => 0 );
+	deferFetch();
 	($player) = playing( $URL, 1390 );
-	is_deeply( $PH->getMetadataFor( $player, $URL ), o1Meta(), 'no track list cached: O1 metadata' );
+	is_deeply( $PH->getMetadataFor( $player, $URL ), o1Meta(), 'no track list on the song or cached: O1 metadata' );
 	is( scalar( timers() ), 0, 'no timer' );
-	is( scalar( requests() ), 0, 'no network' );
+	is( playlistRequests(), 1, 'while playing: the song\'s one fetch' );
+	$PH->getMetadataFor( $player, $URL );
+	is( playlistRequests(), 1, 'not repeated by the next poll' );
+	Slim::Networking::SimpleAsyncHTTP->completeDeferred;
+	is( scalar( newmetadata() ), 1, 'fetched: newmetadata' );
+	is( $PH->getMetadataFor( $player, $URL )->{title}, "Isn't This a Lovely Day", 'then track 5' );
+	is( scalar( timers() ), 1, 'and a timer' );
+
+	fresh( tracks => 0 );
+	deferFetch();
+	($player) = playing( $URL, 1390 );
+	$player->pause;
+	is_deeply( $PH->getMetadataFor( $player, $URL ), o1Meta(), 'paused, no track list: O1 metadata' );
+	is( scalar( requests() ), 0, 'and no fetch while not playing' );
 
 	fresh();
 	($player) = playing( 'rtrfm://episode/saturdayjazz/2026-09-12/0900', 1390 );
@@ -380,6 +498,7 @@ subtest 'getCurrentTitle: follows the current track, else the episode title (sta
 	is( $PH->getCurrentTitle( $player, $URL ), 'Saturday Jazz with Laura Igglesden', 'before the first track: episode title' );
 
 	fresh( tracks => 0 );
+	deferFetch();
 	($player) = playing( $URL, 1390 );
 	is( $PH->getCurrentTitle( $player, $URL ), 'Saturday Jazz with Laura Igglesden', 'no track list: episode title' );
 
@@ -404,13 +523,14 @@ subtest 'onStream: one fetch when not cached, none when cached; always (re)arms'
 	is( $PH->getMetadataFor( $player, $URL )->{title}, "Isn't This a Lovely Day", 'metadata now has the track' );
 
 	advanceTime(100);
-	$player->seek(1700);    # a seek re-opens the stream
-	$PH->onStream( $player, $song );
-	is( playlistRequests(), 1, 'cached: no second fetch' );
+	seekStream( $player, $song, 1700 );    # a seek re-opens the stream; songTime is 0 during onStream
+	is( playlistRequests(), 1, 'known: no second fetch' );
 	my @timers = timers();
 	is( scalar @timers, 1, 'one timer' );
-	is( $timers[0]->{when}, $T0 + 100 + 40.5, 're-armed for the new position' );
-	is( scalar( newmetadata() ), 1, 'no extra notification from a cached onStream' );
+	is( $timers[0]->{when}, $T0 + 100 + 40.5, 're-armed for the seek target (seekdata), not songTime' );
+	is( scalar( newmetadata() ), 1, 'no extra notification from onStream with the list known' );
+	$PH->getMetadataFor( $player, $URL );
+	is( ( boundaryTimers() )[0]->{when}, $T0 + 100 + 40.5, 'playing from 1700: the same timer' );
 
 	my $slave = FakePlayer->new( master => $player );
 	$PH->onStream( $slave, $song );
@@ -450,7 +570,7 @@ subtest 'onStream: slow fetch completing after the player moved on, failures, no
 	is( scalar( notifications() ), 0, 'no notification' );
 	is( scalar( timers() ), 0, 'no timer, no retry' );
 	is_deeply( $PH->getMetadataFor( $player, $URL ), o1Meta(), 'O1 metadata' );
-	is( playlistRequests(), 1, 'getMetadataFor never fetches' );
+	is( playlistRequests(), 1, 'getMetadataFor does not fetch again for the song' );
 
 	fresh( meta => 0, tracks => 0 );
 	( $player, $song ) = playing( 'rtrfm://episode/saturdayjazz/2026-09-19', 1390 );
@@ -462,6 +582,52 @@ subtest 'onStream: slow fetch completing after the player moved on, failures, no
 	( $player, $song ) = playing( $LIVE, 10 );
 	$PH->onStream( $player, $song );
 	is( scalar( requests() ), 0, 'not an episode URL: nothing fetched' );
+};
+
+subtest 'onStream for the next playlist item (streamed early) leaves the playing episode timer alone' => sub {
+	my $NEXT = 'rtrfm://episode/saturdayjazz/2026-09-12/0900';
+	fresh();
+	Slim::Utils::Cache->new('rtrfm')->set( 'tracklist:saturdayjazz:2026-09-12 09:00:00', [ { offset => 100, title => 'Next one' }, { offset => 5000, title => 'Next two' } ], 3600 );
+	my ( $player, $song ) = playing( $URL, 1390 );
+	$PH->onStream( $player, $song );
+	is( ( boundaryTimers() )[0]->{when}, $T0 + 350.5, 'armed for track 6' );
+
+	# LMS streams the next item while this one plays: playingSong is still this one, songTime
+	# its position
+	advanceTime(10);
+	my $nextSong = FakeSong->new( $NEXT, $player );
+	$PH->onStream( $player, $nextSong );
+	my @timers = boundaryTimers();
+	is( scalar( timers() ), 1, 'one timer' );
+	is( $timers[0] && $timers[0]->{when}, $T0 + 350.5, "still the playing episode's" );
+	is_deeply( $timers[0] && $timers[0]->{args}, [$URL], 'for its URL' );
+	is( scalar( requests() ), 0, 'no request' );
+	advanceTime(340.5);
+	is( scalar( newmetadata() ), 1, "the playing episode's boundary is announced" );
+
+	# once the next item plays, its list is known
+	advanceTime(10);
+	$player->play( $nextSong, 200 );
+	$Slim::Player::Playlist::PLAYLISTS{ $player->id } = [$NEXT];
+	is( $PH->getMetadataFor( $player, $NEXT )->{title}, 'Next one', 'next item playing: its track' );
+	is( ( boundaryTimers() )[0]->{when}, $T0 + 360.5 + 4800.5, 'and its timer' );
+};
+
+subtest 'onStream from a sync slave does nothing: only the master fetches' => sub {
+	fresh( tracks => 0 );
+	deferFetch();
+	my ( $player, $song ) = playing( $URL, 1390 );
+	my $slave = FakePlayer->new( master => $player );
+	$PH->onStream( $slave, $song );
+	is( playlistRequests(), 0, 'slave, list not cached: no fetch' );
+	is( scalar( timers() ), 0, 'and no timer' );
+	$PH->onStream( $player, $song );
+	is( playlistRequests(), 1, "the master's: one fetch" );
+	$PH->onStream( $slave, $song );
+	is( playlistRequests(), 1, 'slave again, still not cached: no second fetch' );
+	Slim::Networking::SimpleAsyncHTTP->completeDeferred;
+	is( scalar( newmetadata() ), 1, 'fetched: one newmetadata' );
+	is( scalar( timers() ), 1, 'one timer' );
 };
 
 subtest 'onStop kills the player timer' => sub {
@@ -623,11 +789,19 @@ package FakeSong;
 # Like Slim::Player::Song; duration/startOffset record any setter call.
 sub new {
 	my ( $class, $url, $master ) = @_;
-	return bless { track => FakeTrack->new($url), master => $master, setters => [] }, $class;
+	return bless { track => FakeTrack->new($url), master => $master, setters => [], data => {} }, $class;
 }
 
 sub currentTrack { $_[0]->{track} }
 sub master       { $_[0]->{master} }
+sub seekdata     { $_[0]->{seekdata} }
+
+# like Slim::Player::Song::pluginData (set with a defined value, get by key; not namespaced)
+sub pluginData {
+	my ( $self, $key, $value ) = @_;
+	$self->{data}->{$key} = $value if defined $value;
+	return $self->{data}->{$key};
+}
 
 sub duration    { my $self = shift; push @{ $self->{setters} }, [ duration    => @_ ] if @_; return 7200 }
 sub startOffset { my $self = shift; push @{ $self->{setters} }, [ startOffset => @_ ] if @_; return 0 }
