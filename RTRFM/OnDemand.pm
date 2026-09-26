@@ -54,6 +54,7 @@ my $log = logger('plugin.rtrfm');
 
 sub init {
 	Slim::Player::ProtocolHandlers->registerHandler( rtrfm => 'Plugins::RTRFM::ProtocolHandler' );
+	Plugins::RTRFM::ProtocolHandler->initTrackInfo();
 }
 
 # Top level: one "Programs" link. No network access here.

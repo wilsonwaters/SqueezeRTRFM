@@ -67,7 +67,8 @@ PLUGIN_RTRFM_NO_TRACKLIST
 
 # === O4 === Current track during episode playback
 
-# (no strings yet)
+PLUGIN_RTRFM_EPISODE_NOTES
+	EN	Episode notes
 
 # === O5 === Show artwork, descriptions and line-up
 

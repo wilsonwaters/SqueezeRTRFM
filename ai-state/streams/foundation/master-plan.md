@@ -143,3 +143,8 @@ skin Radio menu shows "RTRFM 92.1" with icon, containing "RTRFM 92.1 Live"; play
   confirmation popup; list Infinite Mix; keep repo.xml/plugin descriptions consistent with shipped features.
   Also for F3: RELEASING.md wording on superseded queued runs; optionally make release.yml commit repo.xml as the
   repository owner rather than github-actions[bot] (stakeholder authorship preference — confirm).
+- 2026-09-26 — F3 scope additions (orchestrator): (a) release.yml commits repo.xml as "Wilson Waters
+  <wilsonwaters@users.noreply.github.com>" instead of github-actions[bot] (stakeholder: all commits as them);
+  (b) `Tracklist::fetch` passes `quiet => 1` so the expected 400 for not-yet-published playlists isn't a WARN
+  (small ondemand touch, sanctioned); (c) README documents known first-open latency (show page + availability
+  checks, cached 24 h) and O6's 28-day window.
