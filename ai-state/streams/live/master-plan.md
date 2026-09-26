@@ -78,3 +78,6 @@ research §4b), so show-level metadata is the ceiling.
 - 2026-09-26 — Spec-writing refinements (issues #4, #5): Default skin shows the on-air line only on the item detail
   view (line2 visible in Material/menu mode); 3 s menu deadline, 20 s fetch back-off, 60–900 s poll clamp, 300 s poll
   when `current`/`next` missing; album text uses "·" separator.
+- 2026-09-26 — L1 review finding: `HTTP.pm` logs every failed request at WARN (foundation, append-only), so "one WARN
+  per run of failures" can't be met by callers. Decision: L2 (#5) adds an additive, caller-controlled failure log level
+  option to `HTTP.pm` (e.g. `quiet => 1` → DEBUG) — flagged in its PR — and switches `NowPlaying.pm` to use it.

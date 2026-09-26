@@ -1,7 +1,8 @@
 # Project Progress
 
 ## Currently in flight
-- Wave 1 implementation agents (parallel worktrees): #2 F2 `feat/F2-packaging`, #4 L1 `feat/L1-live-menu`, #6 O1 → PR #13 (under review + runtime verification), #7 O2 `feat/O2-browse`.
+- Wave 2 (ondemand) implementation agents: #8 O3 `feat/O3-tracklists`, #10 O5 `feat/O5-show-artwork` (parallel; disjoint OnDemand.pm builders).
+- Wave 1 implementation agents (parallel worktrees): #2 F2 `feat/F2-packaging`, #4 L1 → PR #16 (review APPROVE; runtime verification running; t/13 conflict with #14 expected — second to merge reconciles).
 
 ## Issue map
 | Task | Issue | Stream | Size | Depends on |
@@ -19,6 +20,8 @@
 | O6 | #11 | ondemand | M | #6, #7 (soft #8) |
 
 ## Last 5 completions
+- 2026-09-26 — #7 O2 merged (PR #14, squash 4cb41ec): review APPROVE, runtime PASS; **IC-1 PASS** (web UI browse → play episode → seek → favourite replay after restart) → brief criterion 2 met.
+- 2026-09-26 — #6 O1 merged (PR #13, squash 1cb1cbb): review APPROVE (leak + cover(0) fixed pre-merge), runtime PASS (play, seek 1800, fallback metadata, unavailable handling, favourite after restart, direct + proxied).
 - 2026-09-26 — #1 F1 merged (PR #12, squash a8c59ba): review APPROVE (4 minor findings fixed pre-merge: anchored URL validation, 25 s hook timeout, $cb outside eval, Playlist stub), runtime PASS (stream1 plays via JSON-RPC and web UI).
 - 2026-09-26 — All 11 task specs published to issues #1–#11; master-plan changelogs updated with spec refinements.
 - 2026-09-26 — Streams + master plans accepted (`ai-state/streams.md`, `ai-state/streams/*/master-plan.md`); 11 issues filed.
