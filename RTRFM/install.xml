@@ -3,7 +3,7 @@
 	<id>FF07025D-E466-4F27-8B84-82DD71A79CCE</id>
 	<name>PLUGIN_RTRFM</name>
 	<module>Plugins::RTRFM::Plugin</module>
-	<version>0.1.0</version>
+	<version>1.0.0</version>
 	<description>PLUGIN_RTRFM_DESC</description>
 	<creator>Wilson Waters</creator>
 	<category>radio</category>
