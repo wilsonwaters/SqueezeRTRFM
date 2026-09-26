@@ -103,6 +103,8 @@ subtest 'menuItems: one "Programs" link, synchronous, no network' => sub {
 	is( scalar @META_WRITES, 0, 'no metadata writes' );
 };
 
+# No rtrfm.com.au line-up route here, so _programsFeed falls back to the Airnet list (O5's merge
+# is tested in t/38-program-merge.t).
 subtest '_programsFeed / _programItem: the program list' => sub {
 	reset_all();
 
@@ -113,15 +115,16 @@ subtest '_programsFeed / _programItem: the program list' => sub {
 		$items->[0],
 		{
 			name        => 'All City',
+			line1       => 'All City',
 			type        => 'link',
-			url         => \&Plugins::RTRFM::OnDemand::_episodesFeed,
+			url         => \&Plugins::RTRFM::OnDemand::_programMenu,
 			passthrough => [ { slug => 'allcity', name => 'All City', image => undef } ],
 			image       => $ICON,
 		},
-		'first item: exact keys, link to _episodesFeed, program hash {slug, name, image} passed through, station icon'
+		'first item: exact keys, link to _programMenu, program hash {slug, name, image} passed through, station icon'
 	);
 
-	is_deeply( [ grep { join( ',', sort keys %$_ ) ne 'image,name,passthrough,type,url' } @$items ], [], 'every program item has exactly name/type/url/passthrough/image' );
+	is_deeply( [ grep { join( ',', sort keys %$_ ) ne 'image,line1,name,passthrough,type,url' } @$items ], [], 'every program item has exactly name/line1/type/url/passthrough/image' );
 	is_deeply( [ map { lc $_->{name} } @$items ], [ sort map { lc $_->{name} } @$items ], 'alphabetical' );
 
 	my %names = map { $_->{name} => 1 } @$items;
@@ -132,17 +135,19 @@ subtest '_programsFeed / _programItem: the program list' => sub {
 		Plugins::RTRFM::OnDemand::_programItem( undef, { slug => 'saturdayjazz', name => 'Saturday Jazz', image => 'https://example.test/sj.jpg', extra => 1 } ),
 		{
 			name        => 'Saturday Jazz',
+			line1       => 'Saturday Jazz',
 			type        => 'link',
-			url         => \&Plugins::RTRFM::OnDemand::_episodesFeed,
+			url         => \&Plugins::RTRFM::OnDemand::_programMenu,
 			passthrough => [ { slug => 'saturdayjazz', name => 'Saturday Jazz', image => 'https://example.test/sj.jpg', extra => 1 } ],
 			image       => 'https://example.test/sj.jpg',
 		},
 		'a program image wins over the station icon; extra keys pass through untouched'
 	);
 
-	is( requestCount(), 1, 'one HTTP request' );
+	my $airnetRequests = sub { scalar grep { index( $_->{url}, $BASE ) == 0 } requests() };
+	is( $airnetRequests->(), 1, 'one Airnet request' );
 	open_feed( \&Plugins::RTRFM::OnDemand::_programsFeed );
-	is( requestCount(), 1, 're-opening within the TTL makes no HTTP request' );
+	is( $airnetRequests->(), 1, 're-opening within the TTL makes no Airnet request' );
 };
 
 subtest '_episodesFeed / _episodeItem: Saturday Jazz at 2026-09-26 11:40 Perth' => sub {

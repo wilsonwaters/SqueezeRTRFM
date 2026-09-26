@@ -39,6 +39,7 @@ use Slim::Utils::Strings qw(cstring);
 
 use Plugins::RTRFM::Airnet;
 use Plugins::RTRFM::ProtocolHandler;
+use Plugins::RTRFM::Shows;
 use Plugins::RTRFM::Util;
 use Plugins::RTRFM::Tracklist;
 
@@ -63,30 +64,193 @@ sub menuItems {
 	} ] );
 }
 
+# Program list: the rtrfm.com.au line-up (Plugins::RTRFM::Shows) merged with Airnet's programs,
+# both fetched at once (see _mergePrograms). Program hashes from the line-up are
+# { slug, name, image, schedule, hosts, genres }; from Airnet { slug, name, image => undef }.
 sub _programsFeed {
 	my ( $client, $cb, $args ) = @_;
 
-	Plugins::RTRFM::Airnet::programs( sub {
-		my ( $programs, $error ) = @_;
+	my ( $airnet, $lineup, $lineupError, $haveAirnet, $haveLineup );
+
+	my $done = sub {
+		return unless $haveAirnet && $haveLineup;
+
+		my $programs = _mergePrograms( $airnet, $lineup, $lineupError );
 
 		return _textFeed( $client, $cb, 'PLUGIN_RTRFM_LOAD_FAILED' ) unless $programs;
 
 		_respond( $client, $cb, sub {
-			return [ map { _programItem( $client, { image => undef, %$_ } ) } @$programs ];
+			return [ map { _programItem( $client, $_ ) } @$programs ];
 		} );
+	};
+
+	Plugins::RTRFM::Airnet::programs( sub {
+		return if $haveAirnet++;
+		$airnet = shift;
+		$done->();
 	} );
+
+	Plugins::RTRFM::Shows::lineup( sub {
+		return if $haveLineup++;
+		( $lineup, $lineupError ) = @_;
+		$done->();
+	} );
+}
+
+# ($airnetPrograms, $lineupShows, $lineupError) -> program hashes, or undef if both failed:
+#   - line-up OK: its shows whose slug Airnet knows, with the WordPress name, image, schedule,
+#     hosts and genres, sorted by name; WordPress-only shows are logged at info level;
+#   - line-up failed or empty (or no slug in common): Airnet's list as before, logged as a warning;
+#   - Airnet failed (or empty), line-up OK: the whole line-up.
+sub _mergePrograms {
+	my ( $airnet, $lineup, $lineupError ) = @_;
+
+	my $airnetList = $airnet ? [ map { +{ image => undef, %$_ } } @$airnet ] : undef;
+
+	if ( !$lineup || !@$lineup ) {
+		$log->warn( 'Listing the Airnet programs: the rtrfm.com.au line-up is unavailable (' . ( $lineupError || 'no shows' ) . ')' ) if $airnetList;
+		return $airnetList;
+	}
+
+	my @shows = map {
+		+{
+			slug     => $_->{slug},
+			name     => $_->{name},
+			image    => $_->{image},
+			schedule => $_->{schedule},
+			hosts    => [ @{ $_->{hosts}  || [] } ],
+			genres   => [ @{ $_->{genres} || [] } ],
+		}
+	} @$lineup;
+
+	if ( !$airnet || !@$airnet ) {
+		main::INFOLOG && $log->is_info && $log->info('Airnet program list unavailable: listing the whole rtrfm.com.au line-up');
+		return _sortPrograms( \@shows );
+	}
+
+	my %known = map { $_->{slug} => 1 } @$airnet;
+
+	if ( my @unknown = grep { !$known{ $_->{slug} } } @shows ) {
+		main::INFOLOG && $log->is_info && $log->info( 'Not listing shows that Airnet does not know yet: ' . join( ', ', map { $_->{slug} } @unknown ) );
+	}
+
+	my @programs = grep { $known{ $_->{slug} } } @shows;
+
+	if ( !@programs ) {
+		$log->warn('Listing the Airnet programs: no show in the rtrfm.com.au line-up is known to Airnet');
+		return $airnetList;
+	}
+
+	return _sortPrograms( \@programs );
+}
+
+sub _sortPrograms {
+	return [ sort { lc $a->{name} cmp lc $b->{name} || $a->{slug} cmp $b->{slug} } @{ $_[0] } ];
 }
 
 sub _programItem {
 	my ( $client, $program ) = @_;
 
-	return {
+	my $item = {
 		name        => $program->{name},
+		line1       => $program->{name},
 		type        => 'link',
-		url         => \&_episodesFeed,
+		url         => \&_programMenu,
 		passthrough => [$program],
 		image       => $program->{image} || Plugins::RTRFM::Util::ICON,
 	};
+
+	# shown by Material, Jive and the CLI menu mode; the Default web skin shows only the name
+	$item->{line2} = $program->{schedule} if defined $program->{schedule} && length $program->{schedule};
+
+	return $item;
+}
+
+# One program: the header items (_programHeader) followed by all of _episodesFeed's items.
+# The show page (Plugins::RTRFM::Shows::showPage) and the episodes are fetched at once, except
+# when the program has no image: then the show page comes first, so that the episode items and
+# the episode metadata cache get its og:image. Calls back exactly once.
+sub _programMenu {
+	my ( $client, $cb, $args, $program ) = @_;
+	$program = {} unless ref $program eq 'HASH';
+
+	my $called;
+	my $once = sub { $cb->(@_) unless $called++ };
+
+	if ( !$program->{image} ) {
+		my $havePage;
+
+		return Plugins::RTRFM::Shows::showPage( $program->{slug}, sub {
+			return if $havePage++;
+			my $page = shift;
+
+			# a copy: the passthrough hash stays untouched
+			my $withImage = $page && $page->{image} ? { %$program, image => $page->{image} } : $program;
+
+			_episodesFeed( $client, sub { _programMenuRespond( $client, $once, $withImage, $page, shift ) }, $args, $withImage );
+		} );
+	}
+
+	my ( $page, $feed, $havePage, $haveFeed );
+
+	my $done = sub {
+		_programMenuRespond( $client, $once, $program, $page, $feed ) if $havePage && $haveFeed;
+	};
+
+	Plugins::RTRFM::Shows::showPage( $program->{slug}, sub {
+		return if $havePage++;
+		$page = shift;
+		$done->();
+	} );
+
+	_episodesFeed( $client, sub {
+		return if $haveFeed++;
+		$feed = shift;
+		$done->();
+	}, $args, $program );
+}
+
+# Call back with the header items in front of the episode feed's items (other keys of the
+# episode feed's result are kept).
+sub _programMenuRespond {
+	my ( $client, $cb, $program, $page, $feed ) = @_;
+
+	my @header = eval { _programHeader( $client, $program, $page ) };
+	$log->error( 'Building the RTRFM program header failed: ' . $@ ) if $@;
+
+	my %result = ref $feed eq 'HASH' ? %$feed : ();
+	my $items  = ref $feed eq 'HASH' ? $feed->{items} : $feed;
+
+	$result{items} = [ @header, ref $items eq 'ARRAY' ? @$items : () ];
+
+	$cb->( \%result );
+}
+
+# Header items, each only if present: the description (show page) as a textarea, the schedule,
+# and "Hosted by: A, B, C, D +4 more" (line-up).
+sub _programHeader {
+	my ( $client, $program, $page ) = @_;
+
+	my @items;
+
+	my $description = ref $page eq 'HASH' ? $page->{description} : undef;
+	push @items, { name => $description, type => 'textarea', wrap => 1 } if defined $description && length $description;
+
+	push @items, { name => $program->{schedule}, type => 'text' } if defined $program->{schedule} && length $program->{schedule};
+
+	my @hosts = grep { defined $_ && length $_ } @{ ref $program->{hosts} eq 'ARRAY' ? $program->{hosts} : [] };
+
+	if (@hosts) {
+		my @more  = grep { /\A\+\d+ more\z/ } @hosts;
+		my @names = grep { !/\A\+\d+ more\z/ } @hosts;
+
+		push @items, {
+			name => cstring( $client, 'PLUGIN_RTRFM_HOSTED_BY' ) . ': ' . join( ' ', grep { length } join( ', ', @names ), @more ),
+			type => 'text',
+		};
+	}
+
+	return @items;
 }
 
 sub _episodesFeed {
