@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # the Release workflow runs the same checks before it builds anything
+  workflow_call:
 
 permissions:
   contents: read
@@ -16,11 +18,13 @@ jobs:
 
       # libxml2-utils: xmllint. liburi-perl: URI::Escape, bundled with LMS but not core Perl.
       # libhtml-parser-perl: HTML::Entities, also bundled with LMS, so the tests cover that
-      # decoding path too. Everything else is core Perl or a t/lib stub/shim.
+      # decoding path too. zip/unzip: package build and checks. shellcheck: scripts/*.sh.
+      # Everything else is core Perl or a t/lib stub/shim. The checks themselves run offline.
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libxml2-utils liburi-perl libhtml-parser-perl
+          sudo apt-get install -y --no-install-recommends \
+            libxml2-utils liburi-perl libhtml-parser-perl zip unzip shellcheck
 
       - name: Run scripts/check.sh
         run: scripts/check.sh

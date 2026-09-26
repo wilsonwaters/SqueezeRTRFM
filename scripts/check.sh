@@ -2,10 +2,13 @@
 # check.sh - the project's single quality gate, run locally and in CI.
 #   1. compile check of every RTRFM/**/*.pm (against the t/lib Slim:: stubs)
 #   2. unit tests: prove -lr -It/lib t
-#   3. xmllint --noout RTRFM/install.xml (and repo.xml once it exists)
+#   3. xmllint --noout RTRFM/install.xml and repo.xml
 #   4. strings lint (scripts/lint-strings.pl)
+#   5. package checks: build the zip and check its layout, sha1 and repo.xml (scripts/check-package.sh)
+#   6. shellcheck scripts/*.sh (skipped with a notice when shellcheck is missing, except in CI)
 # Runs every step, prints a summary and exits non-zero if any step failed.
-# Needs perl with URI::Escape (Debian/Ubuntu: liburi-perl), prove and xmllint (libxml2-utils).
+# Needs perl with URI::Escape (Debian/Ubuntu: liburi-perl), prove, xmllint (libxml2-utils), zip,
+# unzip and sha1sum; shellcheck is optional locally.
 # Other LMS-bundled modules are shimmed in t/lib; HTML::Entities (libhtml-parser-perl) is
 # optional: without it the tests only exercise the built-in entity decoder.
 set -uo pipefail
@@ -44,6 +47,18 @@ fi
 
 step "Strings lint"
 perl scripts/lint-strings.pl || fail "strings lint"
+
+step "Package checks (scripts/check-package.sh)"
+scripts/check-package.sh || fail "package checks"
+
+step "shellcheck scripts/*.sh"
+if command -v shellcheck >/dev/null; then
+  if shellcheck scripts/*.sh; then echo "ok   shellcheck: $(echo scripts/*.sh)"; else fail "shellcheck"; fi
+elif [[ -n "${CI:-}" ]]; then
+  fail "shellcheck not installed (CI must run it: apt-get install shellcheck)"
+else
+  echo "NOTICE: shellcheck not installed, skipped (apt-get install shellcheck); CI runs it"
+fi
 
 echo
 if [[ ${#failed[@]} -gt 0 ]]; then

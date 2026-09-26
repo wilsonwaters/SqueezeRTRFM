@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- LMS plugin repository for SqueezeRTRFM. The release workflow writes version, url and sha
+     (scripts/update-repo-xml.pl); don't edit them by hand. See RELEASING.md. -->
+<extensions>
+  <details><title lang="EN">SqueezeRTRFM plugin repository</title></details>
+  <plugins>
+    <plugin name="RTRFM" version="0.1.0" minTarget="8.0" maxTarget="*">
+      <title lang="EN">RTRFM 92.1</title>
+      <desc lang="EN">Unofficial plugin for RTRFM 92.1 (Perth community radio): live stream, on-demand programs and track lists.</desc>
+      <category>radio</category>
+      <icon>https://raw.githubusercontent.com/wilsonwaters/SqueezeRTRFM/main/RTRFM/HTML/EN/plugins/RTRFM/html/images/icon.png</icon>
+      <url>https://github.com/wilsonwaters/SqueezeRTRFM/releases/download/v0.1.0/RTRFM-0.1.0.zip</url>
+      <sha>0000000000000000000000000000000000000000</sha>
+      <link>https://github.com/wilsonwaters/SqueezeRTRFM</link>
+      <creator>Wilson Waters</creator>
+    </plugin>
+  </plugins>
+</extensions>
