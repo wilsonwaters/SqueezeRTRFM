@@ -156,3 +156,8 @@ line-up; full 28-day window for daily shows with episodes lacking audio hidden.
   `Airnet::episodes` returns unfiltered data + pure `filterWindow`; feed callbacks are `{items=>[…]}`; program/episode
   hash shapes defined. (6) New file `EpisodeWindow.pm` (O6) and token `PLUGIN_RTRFM_LOAD_FAILED` (O2, own section).
   Measured retention ≈29 days; Airnet returns HTTP 500 for unknown slugs.
+- 2026-09-26 — O1 merged. Runtime note for O4 (#9): status `current_title` can stay empty for a whole play if a
+  controller polls during the ~5 s scan (LMS per-player title cache stores the empty pre-scan title under the
+  rtrfm URL). Web UI / `playlist_loop` titles unaffected. O4 should refresh the title (e.g. `setCurrentTitle` /
+  `newmetadata`) once metadata is known. Review nit for O6 (#11): move `filterWindow`/empty check inside
+  `_respond`'s eval in `_episodesFeed`.

@@ -1,7 +1,7 @@
 # Project Progress
 
 ## Currently in flight
-- Wave 1 implementation agents (parallel worktrees): #2 F2 `feat/F2-packaging`, #4 L1 → PR #16 (review APPROVE; runtime verification running; t/13 conflict with #14 expected — second to merge reconciles), #6 O1 → PR #13 (review APPROVE; leak + cover(0) fixed at bf095a6; runtime verification running), #7 O2 → PR #14 (review APPROVE; runtime verifier running O2 + IC-1 on a local O1+O2 combination). Nit for O6: move filterWindow/empty check inside `_respond` eval in `_episodesFeed`.
+- Wave 1 implementation agents (parallel worktrees): #2 F2 `feat/F2-packaging`, #4 L1 → PR #16 (review APPROVE; runtime verification running; t/13 conflict with #14 expected — second to merge reconciles), #7 O2 → PR #14 (review APPROVE; runtime verifier running O2 + IC-1 on a local O1+O2 combination). Nit for O6: move filterWindow/empty check inside `_respond` eval in `_episodesFeed`.
 
 ## Issue map
 | Task | Issue | Stream | Size | Depends on |
@@ -19,6 +19,7 @@
 | O6 | #11 | ondemand | M | #6, #7 (soft #8) |
 
 ## Last 5 completions
+- 2026-09-26 — #6 O1 merged (PR #13, squash 1cb1cbb): review APPROVE (leak + cover(0) fixed pre-merge), runtime PASS (play, seek 1800, fallback metadata, unavailable handling, favourite after restart, direct + proxied).
 - 2026-09-26 — #1 F1 merged (PR #12, squash a8c59ba): review APPROVE (4 minor findings fixed pre-merge: anchored URL validation, 25 s hook timeout, $cb outside eval, Playlist stub), runtime PASS (stream1 plays via JSON-RPC and web UI).
 - 2026-09-26 — All 11 task specs published to issues #1–#11; master-plan changelogs updated with spec refinements.
 - 2026-09-26 — Streams + master plans accepted (`ai-state/streams.md`, `ai-state/streams/*/master-plan.md`); 11 issues filed.
