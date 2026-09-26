@@ -1,10 +1,9 @@
 # Project Progress
 
 ## Currently in flight
-**RESUMED 2026-09-26** (paused ~05:10 for stakeholder quota).
-- #22 filed (follow-up, S): fetch show page + episodes concurrently in `_programMenu` (serial path only for shows without line-up artwork; not blocking v1.0).
-- #3 F3 → PR #23 (c2a3ed1; implementer hit the session usage limit after opening the PR; orchestrator verified: check.sh 321 tests PASS, CI green incl. release dry run, smoke.sh 9/9 PASS on test bed): independent review running. Then: bump install.xml → 1.0.0, release v1.0.0, clean-profile install from GitHub + smoke, final system verification.
-- Next: F2 review + runtime verify; merge L1 → dispatch L2; merge O3 → dispatch O4, O6; release v0.1.0 after F2.
+- Phase 5–6: final system verification of v1.0.0 (clean LMS profile → install from GitHub repo.xml → smoke → all
+  user journeys in the Default web UI) — agent running.
+- Open follow-up (not blocking): #22 fetch show page + episodes concurrently in `_programMenu`.
 
 ## Issue map
 | Task | Issue | Stream | Size | Depends on |
@@ -22,6 +21,8 @@
 | O6 | #11 | ondemand | M | #6, #7 (soft #8) |
 
 ## Last 5 completions
+- 2026-09-26 — **v1.0.0 released** (commit f109ac3 bump → release.yml run 36246453992): RTRFM-1.0.0.zip sha1 c2f1c3f0… = repo.xml `<sha>`; repo.xml commit aa16241 authored as Wilson Waters; release notes from CHANGELOG.
+- 2026-09-26 — #3 F3 merged (PR #23, squash e707f30): review REQUEST_CHANGES (blocker: t/14 pinned version 0.1.0 would fail the release run) → fixed by orchestrator; smoke.sh 9/9 PASS; all 11 planned tasks merged.
 - 2026-09-26 — #11 O6 merged (PR #21, squash 3d3274f): runtime PASS; review REQUEST_CHANGES → fixed (closure/timer + waiter cycles broken, waiter-first pump). All ondemand tasks done.
 - 2026-09-26 — #9 O4 merged (PR #20, squash 240dc05): runtime PASS; review REQUEST_CHANGES → fixed (track list kept on song for whole stream; polls no longer cancel boundary notifications; onStream position from seekdata; notify only on track change).
 - 2026-09-26 — #5 L2 merged (PR #18, squash f8f34ef): review REQUEST_CHANGES → fixed (no re-push churn with stream2 queued; polls recover), title-callback approved; runtime PASS (show name/artwork/slot/next in Now Playing, never blank, Show info, light polling, ondemand + other stations unaffected). Live stream complete.
