@@ -63,7 +63,8 @@ Check each of these before opening the pull request:
 
 1. Fork <https://github.com/LMS-Community/lms-plugin-repository> on GitHub.
 2. In the fork, edit `include.json` and add our URL to the `"repositories"` list, keeping the
-   list's existing order and formatting:
+   list's existing order and formatting (keep a comma between entries, and none after the last
+   one, so the file stays valid JSON):
 
    ```json
    "https://raw.githubusercontent.com/wilsonwaters/SqueezeRTRFM/main/repo.xml",

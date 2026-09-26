@@ -29,7 +29,7 @@ subtest 'install.xml' => sub {
 	is( $field{module},       'Plugins::RTRFM::Plugin',                        'module' );
 	is( $field{name},         'PLUGIN_RTRFM',                                  'name is a string token' );
 	is( $field{description},  'PLUGIN_RTRFM_DESC',                             'description is a string token' );
-	is( $field{version},      '0.1.0',                                         'version 0.1.0' );
+	like( $field{version}, qr/\A[0-9]+\.[0-9]+\.[0-9]+\z/, 'version is X.Y.Z (bumped only by release commits)' );
 	is( $field{category},     'radio',                                         'category radio' );
 	is( $field{defaultState}, 'enabled',                                       'enabled by default' );
 	is( $field{icon},         'plugins/RTRFM/html/images/icon.png',            'icon path' );
