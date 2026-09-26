@@ -1,0 +1,80 @@
+# Strings for the RTRFM plugin (English only).
+# Format: a TOKEN line, then one line per language: <TAB>EN<TAB>text
+# Each task edits only inside its own section below.
+
+# === F1 === Foundation: plugin name, description, generic error
+
+PLUGIN_RTRFM
+	EN	RTRFM 92.1
+
+PLUGIN_RTRFM_DESC
+	EN	Listen to RTRFM 92.1, Perth's independent community radio station: the live stream, on-demand episodes and track listings. Unofficial plugin, not affiliated with RTRFM.
+
+PLUGIN_RTRFM_ERROR
+	EN	Sorry, part of the RTRFM menu could not be loaded. Please try again later.
+
+# === L1 === Live menu
+
+PLUGIN_RTRFM_LIVE
+	EN	RTRFM 92.1 Live
+
+PLUGIN_RTRFM_INFINITE_MIX
+	EN	RTRFM Infinite Mix
+
+PLUGIN_RTRFM_INFINITE_MIX_DESC
+	EN	RTRFM's second stream: non-stop mixes from RTRFM presenters.
+
+PLUGIN_RTRFM_ON_AIR
+	EN	On air
+
+PLUGIN_RTRFM_NEXT
+	EN	Next
+
+# === L2 === Live now-playing metadata
+
+PLUGIN_RTRFM_SHOW_INFO
+	EN	Show info
+
+# === O1 === Episode playback
+
+PLUGIN_RTRFM_EPISODE_UNAVAILABLE
+	EN	This episode is no longer available.
+
+PLUGIN_RTRFM_RESOLVE_FAILED
+	EN	Could not load this episode from RTRFM. Please try again later.
+
+# === O2 === Programs and episodes
+
+PLUGIN_RTRFM_PROGRAMS
+	EN	Programs
+
+PLUGIN_RTRFM_NO_EPISODES
+	EN	No episodes available in the last 28 days
+
+# === O3 === Episode track listings
+
+PLUGIN_RTRFM_PLAY_EPISODE
+	EN	Play episode
+
+PLUGIN_RTRFM_TRACKLIST
+	EN	Track list
+
+PLUGIN_RTRFM_NO_TRACKLIST
+	EN	No track list available
+
+# === O4 === Current track during episode playback
+
+# (no strings yet)
+
+# === O5 === Show artwork, descriptions and line-up
+
+PLUGIN_RTRFM_HOSTED_BY
+	EN	Hosted by
+
+# === O6 === Full 28-day window and availability
+
+PLUGIN_RTRFM_TRACKLIST_PENDING
+	EN	Track list not yet available
+
+PLUGIN_RTRFM_AVAILABILITY_UNKNOWN
+	EN	Availability unknown
