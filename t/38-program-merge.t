@@ -315,7 +315,7 @@ subtest '_programMenu: header items, then the episodes' => sub {
 	is_deeply( $items->[2], { name => $SJ_HOSTED_BY, type => 'text' }, '3: "Hosted by: A, B, C, D +2 more"' );
 
 	is_deeply(
-		[ map { $_->{url} } @$items[ 3 .. 6 ] ],
+		[ map { $_->{play} } @$items[ 3 .. 6 ] ],
 		[ map { "rtrfm://episode/saturdayjazz/$_/0900" } qw(2026-09-19 2026-09-12 2026-09-05 2026-08-29) ],
 		'then the episodes, newest first'
 	);
@@ -331,6 +331,13 @@ subtest '_programMenu: header items, then the episodes' => sub {
 	is( scalar( () = requests() ), $before, 're-opening: no HTTP request at all' );
 };
 
+subtest '_sortPrograms: case-insensitive by name, then slug' => sub {
+	my $sorted = Plugins::RTRFM::OnDemand::_sortPrograms(
+		[ { name => 'zed', slug => 'z' }, { name => 'Black & Blue', slug => 'blackandblue' }, { name => 'alpha', slug => 'a2' }, { name => 'Alpha', slug => 'a1' } ]
+	);
+	is_deeply( [ map { $_->{slug} } @$sorted ], [qw(a1 a2 blackandblue z)], 'unsorted line-up comes out in name order' );
+};
+
 subtest '_programMenu: the show page fails' => sub {
 	reset_all();
 	routeAirnet();
@@ -342,7 +349,7 @@ subtest '_programMenu: the show page fails' => sub {
 
 	is( scalar @$items, 2 + 4, 'no description: 2 header items + 4 episodes' );
 	is_deeply( [ @$items[ 0, 1 ] ], [ { name => $SJ_SCHEDULE, type => 'text' }, { name => $SJ_HOSTED_BY, type => 'text' } ], 'schedule and hosts from the line-up' );
-	is( $items->[2]->{url}, 'rtrfm://episode/saturdayjazz/2026-09-19/0900', 'then the episodes' );
+	is( $items->[2]->{play}, 'rtrfm://episode/saturdayjazz/2026-09-19/0900', 'then the episodes' );
 	is( $items->[2]->{image}, $SJ_TEASE_IMAGE, 'with the tease artwork' );
 };
 

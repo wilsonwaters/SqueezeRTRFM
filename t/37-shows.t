@@ -157,6 +157,20 @@ subtest 'parseLineupPage: names, schedules and multi-byte text on pages 2-4' => 
 	is_deeply( Plugins::RTRFM::Shows::parseLineupPage( itemsOf( $PAGE{5} ) ), { shows => [], total => undef }, 'page 5 ("Sorry, no results found"): no shows, no total' );
 };
 
+subtest '_chooseImage: the 768w candidate beats a smaller one of at least 600w' => sub {
+	my $u = 'https://rtrfm.com.au/wp-content/uploads/2012/12/Show';
+	is(
+		Plugins::RTRFM::Shows::_chooseImage( { srcset => "$u-640x360.jpg 640w, $u-768x432.jpg 768w, $u-1024x576.jpg 1024w" } ),
+		"$u-768x432.jpg",
+		'768w chosen over 640w and 1024w'
+	);
+	is(
+		Plugins::RTRFM::Shows::_chooseImage( { srcset => "$u-1024x576.jpg 1024w, $u-640x360.jpg 640w, $u-300x169.jpg 300w" } ),
+		"$u-640x360.jpg",
+		'no 768w: the smallest candidate of at least 600w'
+	);
+};
+
 subtest 'parseLineupPage: srcset choice and odd teases (synthetic)' => sub {
 	my $page  = Plugins::RTRFM::Shows::parseLineupPage( itemsOf( fixture('ondemand/filter-shows-nosrcset.json') ) );
 	my $shows = bySlug( $page->{shows} );
