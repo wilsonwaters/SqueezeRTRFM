@@ -3,8 +3,7 @@
 ## Currently in flight
 **RESUMED 2026-09-26** (paused ~05:10 for stakeholder quota).
 - #5 L2 `feat/L2-live-metadata`: implementation dispatched (+ HTTP.pm quiet option, fix blank live title).
-- IC-3: install from the published GitHub repo.xml on the test bed (verifier running).
-- #8 O3 → PR #17 (CI green): review + runtime verification/IC-2 running. Note for O4: `current_title` stays "Play episode" when started from the submenu — fix with title refresh / getCurrentTitle.
+- #8 O3 → PR #17: review APPROVE (favourite-title minor fixed by orchestrator at 462cda4); runtime verification/IC-2 running. Note for O4: `current_title` stays "Play episode" when started from the submenu — fix with title refresh / getCurrentTitle.
 - #10 O5 `feat/O5-show-artwork`: implementer running.
 - Next: F2 review + runtime verify; merge L1 → dispatch L2; merge O3 → dispatch O4, O6; release v0.1.0 after F2.
 
@@ -24,6 +23,7 @@
 | O6 | #11 | ondemand | M | #6, #7 (soft #8) |
 
 ## Last 5 completions
+- 2026-09-26 — **IC-3 PASS**: v0.1.0 installs from the raw GitHub repo.xml via Settings → Manage Plugins; live + episode play; clean uninstall → brief criterion 4 met.
 - 2026-09-26 — #2 F2 merged (PR #15, squash 6c75cc5): review APPROVE. **v0.1.0 released** by `release.yml` (run 36233625445): asset RTRFM-0.1.0.zip sha1 bbf7fc7f… = repo.xml `<sha>` (bot commit 6aaf7e6); re-dispatch (run 36233685343) was a no-op. Follow-ups for F3: RELEASING.md wording on superseded queued runs; optional: read targets from built commit.
 - 2026-09-26 — #4 L1 merged (PR #16, squash d716ecf): review APPROVE, runtime PASS on merged-with-main c21f9ff (both streams play, on-air/next matches site, favourite survives restart, 1.75 s cold menu).
 - 2026-09-26 — #7 O2 merged (PR #14, squash 4cb41ec): review APPROVE, runtime PASS; **IC-1 PASS** (web UI browse → play episode → seek → favourite replay after restart) → brief criterion 2 met.

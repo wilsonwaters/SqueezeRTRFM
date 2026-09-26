@@ -138,3 +138,8 @@ skin Radio menu shows "RTRFM 92.1" with icon, containing "RTRFM 92.1 Live"; play
   the downloaded asset's sha1, then commits repo.xml (repair path if interrupted); committed repo.xml starts with a
   placeholder sha; headless repo install via `scripts/lms-repo-install.sh` (form POST to
   `/settings/server/plugins.html`); PR dry-run of the release build; CHANGELOG-based release notes.
+- 2026-09-26 — IC-3 PASS (v0.1.0 installed from the raw GitHub repo.xml via the real Manage Plugins UI; live +
+  episode played; clean uninstall). README fixes for F3: "Save" → "Apply"; mention the third-party install
+  confirmation popup; list Infinite Mix; keep repo.xml/plugin descriptions consistent with shipped features.
+  Also for F3: RELEASING.md wording on superseded queued runs; optionally make release.yml commit repo.xml as the
+  repository owner rather than github-actions[bot] (stakeholder authorship preference — confirm).
