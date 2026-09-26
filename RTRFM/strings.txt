@@ -38,10 +38,10 @@ PLUGIN_RTRFM_SHOW_INFO
 # === O1 === Episode playback
 
 PLUGIN_RTRFM_EPISODE_UNAVAILABLE
-	EN	This episode is no longer available.
+	EN	This episode is no longer available
 
 PLUGIN_RTRFM_RESOLVE_FAILED
-	EN	Could not load this episode from RTRFM. Please try again later.
+	EN	Couldn't reach RTRFM to play this episode
 
 # === O2 === Programs and episodes
 
