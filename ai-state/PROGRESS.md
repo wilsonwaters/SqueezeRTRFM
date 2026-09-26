@@ -2,7 +2,8 @@
 
 ## Currently in flight
 **RESUMED 2026-09-26** (paused ~05:10 for stakeholder quota).
-- #11 O6 → PR #21 (CI green; combined with main incl. O4: check.sh 290 tests PASS): review + runtime verification running.
+- #11 O6 → PR #21: runtime PASS (Drivetime 20 eps back to 31 Aug, synthesised oldest plays with O4 track metadata, just-aired Saturday Jazz, cold ~8 s); review REQUEST_CHANGES (major: closure/timer leak per cold open; minor: FIFO starvation) → fix agent running.
+- #22 filed (follow-up, S): fetch show page + episodes concurrently in `_programMenu` (serial path only for shows without line-up artwork; not blocking v1.0).
 - #3 F3: implementation dispatched (docs, smoke.sh, CHANGELOG, release-commit authorship, Tracklist quiet 400).
 - Next: F2 review + runtime verify; merge L1 → dispatch L2; merge O3 → dispatch O4, O6; release v0.1.0 after F2.
 
