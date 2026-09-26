@@ -4,7 +4,8 @@
 **RESUMED 2026-09-26** (paused ~05:10 for stakeholder quota).
 - #5 L2 `feat/L2-live-metadata`: implementation dispatched (+ HTTP.pm quiet option, fix blank live title).
 - IC-3: install from the published GitHub repo.xml on the test bed (verifier running).
-- #8 O3 `feat/O3-tracklists`, #10 O5 `feat/O5-show-artwork`: implementers resumed.
+- #8 O3 → PR #17 (CI green): review + runtime verification/IC-2 running. Note for O4: `current_title` stays "Play episode" when started from the submenu — fix with title refresh / getCurrentTitle.
+- #10 O5 `feat/O5-show-artwork`: implementer running.
 - Next: F2 review + runtime verify; merge L1 → dispatch L2; merge O3 → dispatch O4, O6; release v0.1.0 after F2.
 
 ## Issue map
