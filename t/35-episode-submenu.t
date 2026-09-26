@@ -97,7 +97,17 @@ sub openEpisode {
 
 sub playItem {
 	my ( $url, %extra ) = @_;
-	return { name => 'Play episode', type => 'audio', url => $url, play => $url, on_select => 'play', duration => 7200, image => $ICON, %extra };
+	return {
+		name            => 'Play episode',
+		type            => 'audio',
+		url             => $url,
+		play            => $url,
+		on_select       => 'play',
+		duration        => 7200,
+		image           => $ICON,
+		favorites_title => "Sat 19 Sep $ENDASH Saturday Jazz with Laura Igglesden",    # the row name, not "Play episode"
+		%extra,
+	};
 }
 
 # Copies of LMS 9.1.1 Slim::Control::XMLBrowser::hasAudio (l.1743) and _favoritesParams
@@ -203,7 +213,8 @@ subtest 'opening Sat 12 Sep: the description textarea comes second' => sub {
 	my $items = items_of( open_item($row), 'Sat 12 Sep' );
 
 	is( scalar @$items, 3, 'three items' );
-	is_deeply( $items->[0], playItem('rtrfm://episode/saturdayjazz/2026-09-12/0900'), 'Play episode first' );
+	is_deeply( $items->[0], playItem( 'rtrfm://episode/saturdayjazz/2026-09-12/0900', favorites_title => "Sat 12 Sep $ENDASH Saturday Jazz" ), 'Play episode first' );
+	is( $items->[0]{favorites_title}, $row->{name}, 'a favourite saved from "Play episode" is named like the episode row' );
 	is_deeply(
 		$items->[1],
 		{ name => 'Presented by Ben Bartholomew. Featuring tracks from the debut album by local ensemble the Kirsten Sym Undectet.', type => 'textarea', wrap => 1 },

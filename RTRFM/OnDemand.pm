@@ -133,7 +133,7 @@ sub _episodeItem {
 	my ( $client, $program, $episode ) = @_;
 
 	my $date  = Plugins::RTRFM::Util::friendlyDate( $episode->{date} );
-	my $label = defined $episode->{title} ? $episode->{title} : $program->{name};
+	my $label = _episodeLabel( $program, $episode );
 	my $url   = Plugins::RTRFM::Util::episodeUrl( $episode->{slug}, $episode->{date}, $episode->{hhmm} );
 
 	# Perth start-end time, e.g. 09:00-11:00 (end from Airnet's end, else start + duration)
@@ -145,7 +145,7 @@ sub _episodeItem {
 
 	my $item = {
 		# the Default web skin shows only the name, so it carries the date
-		name        => $date . ' ' . ENDASH . ' ' . $label,
+		name        => _episodeName( $program, $episode ),
 		line1       => $label,
 		line2       => $date . ' ' . MIDDOT . ' ' . $time,
 		type        => 'link',
@@ -158,6 +158,19 @@ sub _episodeItem {
 	$item->{duration} = $episode->{duration} if defined $episode->{duration};
 
 	return $item;
+}
+
+# Episode title, or the show name when Airnet has none
+sub _episodeLabel {
+	my ( $program, $episode ) = @_;
+	return defined $episode->{title} ? $episode->{title} : $program->{name};
+}
+
+# The episode row name, e.g. "Sat 19 Sep – Saturday Jazz with Laura Igglesden"; also the
+# favourite title for "Play episode", so a favourite saved there isn't called "Play episode"
+sub _episodeName {
+	my ( $program, $episode ) = @_;
+	return Plugins::RTRFM::Util::friendlyDate( $episode->{date} ) . ' ' . ENDASH . ' ' . _episodeLabel( $program, $episode );
 }
 
 # The episode submenu (XMLBrowser coderef feed, passthrough [$program, $episode]):
@@ -210,12 +223,13 @@ sub _episodeMenuItems {
 	my ( $client, $program, $episode, $url, $tracks ) = @_;
 
 	my $play = {
-		name      => cstring( $client, 'PLUGIN_RTRFM_PLAY_EPISODE' ),
-		type      => 'audio',
-		url       => $url,
-		play      => $url,
-		on_select => 'play',
-		image     => $program->{image} || Plugins::RTRFM::Util::ICON,
+		name            => cstring( $client, 'PLUGIN_RTRFM_PLAY_EPISODE' ),
+		type            => 'audio',
+		url             => $url,
+		play            => $url,
+		on_select       => 'play',
+		image           => $program->{image} || Plugins::RTRFM::Util::ICON,
+		favorites_title => _episodeName( $program, $episode ),
 	};
 	$play->{duration} = $episode->{duration} if defined $episode->{duration};
 
