@@ -27,3 +27,6 @@ _(none yet)_
    The first 11 commits on `main` after the initial commit (71a09c1 … 0701d66) were made under a different author
    with attribution trailers; correcting them requires rewriting `main` and a force-push, which is left to the
    stakeholder to authorise or perform. PRs are squash-merged with an explicit clean commit message.
+6. **PR screenshots** (2026-09-26) — Specs ask for Default-skin screenshots "attached to the PR", but the GitHub MCP
+   tools cannot upload images and pushing evidence branches is disallowed (can't delete them). Waiver: screenshots are
+   kept in the session scratchpad, cited by path in reports, and viewed by the orchestrator/reviewers.
