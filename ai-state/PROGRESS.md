@@ -3,7 +3,7 @@
 ## Currently in flight
 **RESUMED 2026-09-26** (paused ~05:10 for stakeholder quota).
 - #4 L1 — PR #16: main merged into branch (c21f9ff, t/13 reconciled, check.sh green); runtime verifier resumed.
-- #2 F2 — PR #15 (36379cc, CI green): implementer resumed to finish runtime repo-install test + PR description.
+- #2 F2 — PR #15 (36379cc, CI green incl. release dry run; local repo-install test PASS): independent review running. Post-merge: dispatch `release.yml` on `main` with `{"dry_run": false}` → v0.1.0; verify asset sha1 = repo.xml `<sha>`; re-dispatch expects no-op.
 - #8 O3 `feat/O3-tracklists`, #10 O5 `feat/O5-show-artwork`: implementers resumed.
 - Next: F2 review + runtime verify; merge L1 → dispatch L2; merge O3 → dispatch O4, O6; release v0.1.0 after F2.
 
