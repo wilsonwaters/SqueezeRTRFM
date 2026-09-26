@@ -80,6 +80,23 @@ subtest 'invalid date/time input' => sub {
 	is( perthDate('yesterday'), undef, 'perthDate(non-number)' );
 };
 
+subtest 'dates: ASCII digits and years 1970..2100 only' => sub {
+	my @invalid = (
+		[ '0026-09-19 10:00:00', 'zero-padded two-digit year (Time::Local would read it as 2026)' ],
+		[ '1969-12-31 23:59:59', 'year before 1970' ],
+		[ '2101-01-01 00:00:00', 'year after 2100' ],
+		[ '٢٠٢٦-09-19 10:00:00', 'Arabic-Indic digits in the year' ],
+		[ '2026-09-19 ١٠:00:00', 'Arabic-Indic digits in the time' ],
+	);
+	is( parsePerthDateTime( $_->[0] ), undef, "parsePerthDateTime rejects $_->[1]" ) for @invalid;
+	is( parseISO8601('0026-09-19T10:00:00+08:00'), undef, 'parseISO8601 rejects a zero-padded two-digit year' );
+	is( parseISO8601('٢٠٢٦-09-19T10:00:00+08:00'), undef, 'parseISO8601 rejects Arabic-Indic digits' );
+	is( friendlyDate('0026-09-19'), undef, 'friendlyDate rejects a zero-padded two-digit year' );
+
+	is( parsePerthDateTime('1970-01-01 08:00:00'), 0, 'first valid year: 1970' );
+	is( parsePerthDateTime('2100-12-31 23:59:59'), timegm( 59, 59, 15, 31, 11, 2100 ), 'last valid year: 2100' );
+};
+
 subtest 'friendlyDate from a date string' => sub {
 	is( friendlyDate('2026-09-19'), 'Sat 19 Sep', 'Saturday 19 September' );
 	is( friendlyDate('2026-09-05'), 'Sat 5 Sep',  'no leading zero on the day' );
@@ -151,6 +168,14 @@ subtest 'episode URL contract' => sub {
 		[ 'rtrfm://episode/saturdayjazz/2026-09-19/1260',    'minute 60' ],
 		[ 'rtrfm://episode/saturdayjazz/2026-09-19/900',     'three-digit hhmm' ],
 		[ 'rtrfm://episode/saturdayjazz/26-09-19',           'two-digit year' ],
+		[ 'rtrfm://episode/saturdayjazz/0026-09-19',         'zero-padded two-digit year' ],
+		[ 'rtrfm://episode/saturdayjazz/1969-12-31',         'year before 1970' ],
+		[ 'rtrfm://episode/saturdayjazz/2101-01-01',         'year after 2100' ],
+		[ "rtrfm://episode/saturdayjazz/2026-09-19\n",       'trailing newline' ],
+		[ "rtrfm://episode/saturdayjazz/2026-09-19/0900\n",  'trailing newline after the time' ],
+		[ "rtrfm://episode/saturday\njazz/2026-09-19",       'slug with a newline' ],
+		[ 'rtrfm://episode/saturdayjazz/٢٠٢٦-09-19',         'Arabic-Indic digits in the date' ],
+		[ 'rtrfm://episode/saturdayjazz/2026-09-19/٠٩٠٠',    'Arabic-Indic digits in the time' ],
 	);
 	is( parseEpisodeUrl( $_->[0] ), undef, "invalid URL: $_->[1]" ) for @invalidUrls;
 
@@ -158,6 +183,21 @@ subtest 'episode URL contract' => sub {
 	is( episodeUrl( 'saturdayjazz',  '2026-13-01' ),         undef, 'episodeUrl rejects an invalid date' );
 	is( episodeUrl( 'saturdayjazz',  '2026-09-19', '2460' ), undef, 'episodeUrl rejects an invalid time' );
 	is( episodeUrl( 'saturdayjazz',  undef ),                undef, 'episodeUrl needs a date' );
+
+	my @invalidParts = (
+		[ [ "saturdayjazz\n", '2026-09-19' ],         'slug with a trailing newline' ],
+		[ [ "saturday\njazz", '2026-09-19' ],         'slug with an embedded newline' ],
+		[ [ 'saturdayjazz', "2026-09-19\n" ],         'date with a trailing newline' ],
+		[ [ 'saturdayjazz', '2026-09-19', "0900\n" ], 'time with a trailing newline' ],
+		[ [ 'saturdayjazz', '٢٠٢٦-09-19' ],           'Arabic-Indic digits in the date' ],
+		[ [ 'saturdayjazz', '2026-09-19', '٠٩٠٠' ],   'Arabic-Indic digits in the time' ],
+		[ [ 'saturdayjazz', '0026-09-19' ],           'zero-padded two-digit year' ],
+		[ [ 'saturdayjazz', '2101-01-01' ],           'year after 2100' ],
+	);
+	is( episodeUrl( @{ $_->[0] } ), undef, "episodeUrl rejects $_->[1]" ) for @invalidParts;
+
+	is( episodeUrl( 'x', '1970-01-01' ), 'rtrfm://episode/x/1970-01-01', 'episodeUrl accepts 1970' );
+	is( episodeUrl( 'x', '2100-12-31' ), 'rtrfm://episode/x/2100-12-31', 'episodeUrl accepts 2100' );
 };
 
 subtest 'episode metadata cache contract' => sub {
@@ -184,6 +224,7 @@ subtest 'episode metadata cache contract' => sub {
 	is( getEpisodeMeta( '../x',         '2026-09-19' ), undef, 'invalid slug is a miss' );
 
 	ok( !setEpisodeMeta( { %meta, slug => 'Bad Slug' } ), 'invalid slug is not stored' );
+	ok( !setEpisodeMeta( { %meta, slug => "saturdayjazz\n" } ), 'slug with a trailing newline is not stored' );
 	ok( !setEpisodeMeta( { %meta, date => '2026-02-30' } ), 'invalid date is not stored' );
 	ok( !setEpisodeMeta(undef), 'undef is not stored' );
 

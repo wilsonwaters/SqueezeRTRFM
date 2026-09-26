@@ -48,12 +48,12 @@ my @MONTH_NAMES = qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
 # ---------------------------------------------------------------------------
 
 # 'YYYY-MM-DD HH:MM:SS' (or 'HH:MM', or with a 'T' separator) in Perth local time -> epoch.
-# Returns undef for anything that isn't a valid date and time.
+# Returns undef for anything that isn't a valid date and time (years 1970..2100 only).
 sub parsePerthDateTime {
 	my $string = shift;
 	return undef unless defined $string;
 
-	my ( $y, $mo, $d, $h, $mi, $s ) = $string =~ /^\s*(\d{4})-(\d\d)-(\d\d)[ T](\d\d):(\d\d)(?::(\d\d))?\s*$/
+	my ( $y, $mo, $d, $h, $mi, $s ) = $string =~ /\A\s*([0-9]{4})-([0-9]{2})-([0-9]{2})[ T]([0-9]{2}):([0-9]{2})(?::([0-9]{2}))?\s*\z/
 		or return undef;
 
 	my $epoch = _timegm( $y, $mo, $d, $h, $mi, $s || 0 );
@@ -61,12 +61,13 @@ sub parsePerthDateTime {
 }
 
 # ISO-8601 date-time with a UTC offset, e.g. '2026-09-26T09:00:00+08:00' or '...Z' -> epoch.
-# Without an offset the time is taken as Perth local time. Returns undef if invalid.
+# Without an offset the time is taken as Perth local time. Returns undef if invalid (years
+# 1970..2100 only).
 sub parseISO8601 {
 	my $string = shift;
 	return undef unless defined $string;
 
-	my ( $y, $mo, $d, $h, $mi, $s, $tz ) = $string =~ /^\s*(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)(?::(\d\d)(?:\.\d+)?)?(Z|[+-]\d\d:?\d\d)?\s*$/i
+	my ( $y, $mo, $d, $h, $mi, $s, $tz ) = $string =~ /\A\s*([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.[0-9]+)?)?(Z|[+-][0-9]{2}:?[0-9]{2})?\s*\z/i
 		or return undef;
 
 	my $epoch = _timegm( $y, $mo, $d, $h, $mi, $s || 0 );
@@ -113,7 +114,7 @@ sub friendlyDate {
 	my $value = shift;
 	return undef unless defined $value;
 
-	my $epoch = $value =~ /^\d{4}-\d\d-\d\d$/ ? parsePerthDateTime("$value 12:00:00") : $value;
+	my $epoch = $value =~ /\A[0-9]{4}-[0-9]{2}-[0-9]{2}\z/ ? parsePerthDateTime("$value 12:00:00") : $value;
 
 	my @t = _perthTime($epoch) or return undef;
 	return sprintf( '%s %d %s', $DAY_NAMES[ $t[6] ], $t[3], $MONTH_NAMES[ $t[4] ] );
@@ -131,9 +132,11 @@ sub _timegm {
 	return eval { timegm( $s, $mi, $h, $d, $mo - 1, $y ) };
 }
 
+# Dates are only valid in the years 1970..2100. This also stops Time::Local reading a year
+# such as '0026' as 2026.
 sub _isValidDate {
 	my ( $y, $m, $d ) = @_;
-	return 0 if $m < 1 || $m > 12 || $d < 1;
+	return 0 if $y < 1970 || $y > 2100 || $m < 1 || $m > 12 || $d < 1;
 
 	my $leap = ( $y % 4 == 0 && $y % 100 != 0 ) || $y % 400 == 0;
 	my @days = ( 31, $leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 );
@@ -213,8 +216,9 @@ sub _chr {
 
 # episodeUrl($slug, $date[, $hhmm]) -> 'rtrfm://episode/<slug>/<YYYY-MM-DD>[/<HHMM>]'
 #   $slug: Airnet/restream slug, [a-z0-9_-]+ (e.g. 'drivetime', never 'drivetime/monday')
-#   $date: Perth calendar date of the episode start
+#   $date: Perth calendar date of the episode start, 'YYYY-MM-DD' (years 1970..2100)
 #   $hhmm: optional Perth start time, e.g. '0900'
+# Only ASCII characters are accepted and nothing may follow a part (not even a newline).
 # Returns undef if any part is invalid.
 sub episodeUrl {
 	my ( $slug, $date, $hhmm ) = @_;
@@ -231,7 +235,7 @@ sub parseEpisodeUrl {
 	my $url = shift;
 	return undef unless defined $url;
 
-	my ( $slug, $date, $hhmm ) = $url =~ m{^rtrfm://episode/([a-z0-9_-]+)/(\d{4}-\d\d-\d\d)(?:/(\d{4}))?$}
+	my ( $slug, $date, $hhmm ) = $url =~ m{\Artrfm://episode/([a-z0-9_-]+)/([0-9]{4}-[0-9]{2}-[0-9]{2})(?:/([0-9]{4}))?\z}
 		or return undef;
 
 	return undef unless _isValidDateString($date);
@@ -240,19 +244,19 @@ sub parseEpisodeUrl {
 	return { slug => $slug, date => $date, hhmm => $hhmm };
 }
 
-sub _isValidSlug { defined $_[0] && $_[0] =~ /^[a-z0-9_-]+$/ }
+sub _isValidSlug { defined $_[0] && $_[0] =~ /\A[a-z0-9_-]+\z/ }
 
 sub _isValidDateString {
 	my $date = shift;
 	return 0 unless defined $date;
-	my ( $y, $m, $d ) = $date =~ /^(\d{4})-(\d\d)-(\d\d)$/ or return 0;
+	my ( $y, $m, $d ) = $date =~ /\A([0-9]{4})-([0-9]{2})-([0-9]{2})\z/ or return 0;
 	return _isValidDate( $y, $m, $d );
 }
 
 sub _isValidHHMM {
 	my $hhmm = shift;
 	return 0 unless defined $hhmm;
-	my ( $h, $m ) = $hhmm =~ /^(\d\d)(\d\d)$/ or return 0;
+	my ( $h, $m ) = $hhmm =~ /\A([0-9]{2})([0-9]{2})\z/ or return 0;
 	return $h <= 23 && $m <= 59;
 }
 
