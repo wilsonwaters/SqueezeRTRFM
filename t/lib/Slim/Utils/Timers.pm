@@ -3,7 +3,8 @@ package Slim::Utils::Timers;
 # Test stub for LMS Slim::Utils::Timers.
 # Real API: setTimer($obj, $when, \&code, @args) (also setHighTimer) schedules
 # code->($obj, @args) at hi-res epoch $when; killTimers($obj, \&code) cancels every timer for
-# that object/code pair and returns how many; killSpecific($timer) cancels one.
+# that object/code pair and returns how many; killSpecific($timer) cancels one; forgetTimer($obj)
+# cancels every timer for that object (Slim::Player::Client::forgetClient does this).
 #
 # Nothing fires by itself here. Tests call RTRFMTest::advanceTime()/runTimers(), or
 # Slim::Utils::Timers->fireDue($now) directly, to run the timers that are due.
@@ -34,6 +35,14 @@ sub killTimers {
 	@TIMERS = grep { !( _sameObj( $_->{obj}, $obj ) && $_->{code} == $code ) } @TIMERS;
 
 	return $before - @TIMERS;
+}
+
+sub forgetTimer {
+	my $obj = shift;
+
+	@TIMERS = grep { !_sameObj( $_->{obj}, $obj ) } @TIMERS;
+
+	return;
 }
 
 sub killSpecific {

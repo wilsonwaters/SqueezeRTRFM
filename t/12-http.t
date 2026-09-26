@@ -120,6 +120,50 @@ subtest 'getJSON: error paths call only the error callback, with a readable mess
 	}
 };
 
+subtest 'quiet => 1: failures logged at DEBUG instead of WARN, same callbacks and messages' => sub {
+	# plugin.rtrfm at DEBUG for this subtest, so DEBUG lines are logged
+	local $Slim::Utils::Log::CATEGORIES{'plugin.rtrfm'} = { defaultLevel => 'DEBUG', description => 'PLUGIN_RTRFM' };
+
+	my $url = 'https://rtrfm.com.au/shows/saturdayjazz/';
+	my @cases = (
+		[ 'getJSON HTTP 500',     getJSON      => [$RZZ],             { code => 500, content => 'oops' },            qr/500 Internal Server Error/ ],
+		[ 'getJSON timeout',      getJSON      => [$RZZ],             { error => 'Timed out waiting for data' },     qr/Timed out waiting for data/ ],
+		[ 'getJSON invalid JSON', getJSON      => [$RZZ],             { code => 200, content => '<html></html>' },   qr/Invalid JSON/ ],
+		[ 'getJSON empty body',   getJSON      => [$RZZ],             { code => 200, content => '' },                qr/Empty response/ ],
+		[ 'postFormJSON 403',     postFormJSON => [ $RZZ, { a => 1 } ], { code => 403, content => 'Forbidden' },       qr/403 Forbidden/ ],
+		[ 'get 404',              get          => [$url],             { code => 404 },                               qr/404 Not Found/ ],
+	);
+
+	for my $case (@cases) {
+		my ( $name, $call, $leading, $response, $expected ) = @$case;
+		my $target = $leading->[0];
+
+		resetStubs();
+		route( $target, %$response );
+		my ( $ok, $err, $req ) = run_request( $call => $leading, { quiet => 1 } );
+		exactly_one( $ok, $err, 'err', "quiet $name" );
+		my ($message) = $err->args(0);
+		like( $message, $expected, "quiet $name: same readable message" );
+		like( $message, qr/\Q$target\E/, "quiet $name: message names the URL" );
+		is( scalar Slim::Utils::Log->messages( level => 'WARN', category => 'plugin.rtrfm' ), 0, "quiet $name: no WARN" );
+		ok( ( grep { $_->{message} eq $message } Slim::Utils::Log->messages( level => 'DEBUG', category => 'plugin.rtrfm' ) ), "quiet $name: logged at DEBUG" );
+		ok( !exists $req->{params}->{quiet}, "quiet $name: not passed to SimpleAsyncHTTP" );
+
+		# the default is unchanged: the same failure without quiet logs a WARN
+		resetStubs();
+		route( $target, %$response );
+		( $ok, $err ) = run_request( $call => $leading, { quiet => 0 } );
+		exactly_one( $ok, $err, 'err', "not quiet $name" );
+		is( scalar Slim::Utils::Log->messages( level => 'WARN', category => 'plugin.rtrfm' ), 1, "quiet => 0 $name: one WARN" );
+	}
+
+	resetStubs();
+	route( $RZZ, file => 'foundation/rzz.json' );
+	my ( $ok, $err ) = run_request( getJSON => [$RZZ], { quiet => 1 } );
+	exactly_one( $ok, $err, 'ok', 'quiet success' );
+	is( ref( ( $ok->args(0) )[0] ), 'HASH', 'quiet success: decoded as usual' );
+};
+
 subtest 'getJSON: no route (network failure) still calls back once' => sub {
 	resetStubs();
 	my ( $ok, $err ) = run_request( getJSON => ['https://nowhere.test/'], undef );

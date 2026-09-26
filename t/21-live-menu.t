@@ -2,7 +2,7 @@
 # Plugins::RTRFM::Live->menuItems: the two live items (exact keys and values), the callback
 # called exactly once on every path (fresh cache, fetch success, 3 s deadline with a late
 # response, fetch errors with a still-valid or expired lastGood, a dying item builder, no
-# player), stream URL selection, and no network access at init.
+# player), stream URL selection, and no network access or timer at init.
 
 use strict;
 use warnings;
@@ -108,7 +108,7 @@ subtest 'strings' => sub {
 	is( Slim::Utils::Strings::string('PLUGIN_RTRFM_INFINITE_MIX_DESC'), $MIX_DESC, 'PLUGIN_RTRFM_INFINITE_MIX_DESC' );
 };
 
-subtest 'init: no-op, no network' => sub {
+subtest 'init: no network, no timer' => sub {
 	fresh_start();
 	Plugins::RTRFM::Live->init();
 	is( scalar requests(), 0, 'no request' );

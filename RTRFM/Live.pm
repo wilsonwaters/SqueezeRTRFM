@@ -26,7 +26,11 @@ use constant MENU_DEADLINE => 3;    # seconds
 
 my $log = logger('plugin.rtrfm');
 
-sub init { }
+# Now-playing metadata for the live streams. Loaded here, so the menu works even if it can't be.
+sub init {
+	require Plugins::RTRFM::LiveMetadata;
+	Plugins::RTRFM::LiveMetadata->init();
+}
 
 sub menuItems {
 	my ( $class, $client, $cb, $args ) = @_;
