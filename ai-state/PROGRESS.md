@@ -4,7 +4,6 @@
 **RESUMED 2026-09-26** (paused ~05:10 for stakeholder quota).
 - #5 L2 → PR #18 (CI green; HTTP.pm quiet option + blank-title fix via Info title-change callback): review REQUEST_CHANGES (major: metadata re-push churn with both streams queued; minor: stuck poll state) → fix agent running; title callback approved; runtime verification running.
 - #9 O4 `feat/O4-track-now-playing`: implementation dispatched (+ stale current_title fix).
-- #10 O5 → PR #19 (CI green; 46-show line-up with artwork, program header): review + runtime verification running. Likely trivial OnDemand.pm/t/33 conflict with #17 for whichever merges second.
 - Next: F2 review + runtime verify; merge L1 → dispatch L2; merge O3 → dispatch O4, O6; release v0.1.0 after F2.
 
 ## Issue map
@@ -23,6 +22,7 @@
 | O6 | #11 | ondemand | M | #6, #7 (soft #8) |
 
 ## Last 5 completions
+- 2026-09-26 — #10 O5 merged (PR #19, squash edbaef3): review APPROVE (orchestrator merged main, fixed t/38 for O3's link rows, added 768w + sort tests), runtime PASS (46-show line-up with artwork, program header; cold Programs load 5.6 s).
 - 2026-09-26 — #8 O3 merged (PR #17, squash aff0b0d): review APPROVE, runtime PASS; **IC-2 PASS** (track lists visible in web UI, all rows match Airnet) → brief criterion 3 met. **All 5 brief success criteria now met on main.**
 - 2026-09-26 — **IC-3 PASS**: v0.1.0 installs from the raw GitHub repo.xml via Settings → Manage Plugins; live + episode play; clean uninstall → brief criterion 4 met.
 - 2026-09-26 — #2 F2 merged (PR #15, squash 6c75cc5): review APPROVE. **v0.1.0 released** by `release.yml` (run 36233625445): asset RTRFM-0.1.0.zip sha1 bbf7fc7f… = repo.xml `<sha>` (bot commit 6aaf7e6); re-dispatch (run 36233685343) was a no-op. Follow-ups for F3: RELEASING.md wording on superseded queued runs; optional: read targets from built commit.
