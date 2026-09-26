@@ -4,13 +4,13 @@
 <extensions>
   <details><title lang="EN">SqueezeRTRFM plugin repository</title></details>
   <plugins>
-    <plugin name="RTRFM" version="0.1.0" minTarget="8.0" maxTarget="*">
+    <plugin name="RTRFM" version="1.0.0" minTarget="8.0" maxTarget="*">
       <title lang="EN">RTRFM 92.1</title>
       <desc lang="EN">Unofficial plugin for RTRFM 92.1 (Perth community radio): the live stream and Infinite Mix with the show on air, programs with episodes from the last 28 days, and track lists.</desc>
       <category>radio</category>
       <icon>https://raw.githubusercontent.com/wilsonwaters/SqueezeRTRFM/main/RTRFM/HTML/EN/plugins/RTRFM/html/images/icon.png</icon>
-      <url>https://github.com/wilsonwaters/SqueezeRTRFM/releases/download/v0.1.0/RTRFM-0.1.0.zip</url>
-      <sha>bbf7fc7fc804783ea1cb3626e48e1cea467fdbdd</sha>
+      <url>https://github.com/wilsonwaters/SqueezeRTRFM/releases/download/v1.0.0/RTRFM-1.0.0.zip</url>
+      <sha>c2f1c3f08496ae13b4ed0bcbf98bda89b5d2344e</sha>
       <link>https://github.com/wilsonwaters/SqueezeRTRFM</link>
       <creator>Wilson Waters</creator>
     </plugin>
