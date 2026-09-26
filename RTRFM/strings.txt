@@ -22,13 +22,13 @@ PLUGIN_RTRFM_INFINITE_MIX
 	EN	RTRFM Infinite Mix
 
 PLUGIN_RTRFM_INFINITE_MIX_DESC
-	EN	RTRFM's second stream: non-stop mixes from RTRFM presenters.
+	EN	Non-stop mixes on RTRFM's second stream
 
 PLUGIN_RTRFM_ON_AIR
-	EN	On air
+	EN	On air: %s
 
 PLUGIN_RTRFM_NEXT
-	EN	Next
+	EN	Next: %s
 
 # === L2 === Live now-playing metadata
 

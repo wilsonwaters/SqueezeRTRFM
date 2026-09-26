@@ -1,0 +1,6 @@
+{"success":true,"data":{
+ "current":{"time":"11.00am - 1.00pm","name":"Global Rhythm Pot","startTime":"2026-09-26T11:00:00+08:00","link":"https://rtrfm.com.au/shows/globalrhythmpot/","thumbnail":"https://rtrfm.com.au/wp-content/uploads/2012/12/GlobalRhythmPot.jpg","day":""},
+ "next":{"time":"1.00pm - 3.00pm","name":"Homegrown","startTime":"2026-09-26T13:00:00+08:00","link":"https://rtrfm.com.au/shows/homegrown/","thumbnail":"https://rtrfm.com.au/wp-content/uploads/2012/12/homegrown-1.jpg","day":""},
+ "stream_url":"https://live.rtrfm.com.au/stream1-hq",
+ "current_show":{"name":"Global Rhythm Pot","slug":"globalrhythmpot","url":"https://rtrfm.com.au/shows/globalrhythmpot/","short_description":" A sonic journey around the world, offering stopovers in funk, beats and folk traditions.","friendly_days":"Saturdays","friendly_times":"11.00am - 1.00pm","start_time":"2026-09-26T11:00:00+08:00","end_time":"2026-09-26T13:00:00+08:00"},
+ "next_show":{"name":"Homegrown","slug":"homegrown","url":"https://rtrfm.com.au/shows/homegrown/","short_description":"Your local music love-in with live performances and interviews.","friendly_days":"Saturdays","friendly_times":"1.00pm - 3.00pm","start_time":"2026-09-26T13:00:00+08:00","end_time":"2026-09-26T15:00:00+08:00"}}}
