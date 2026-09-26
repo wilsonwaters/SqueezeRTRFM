@@ -5,10 +5,13 @@ A [Lyrion Music Server](https://lyrion.org/) (LMS, formerly Logitech Media Serve
 
 ## About
 
-The plugin adds **RTRFM 92.1** to the LMS Radio menu. Inside it, **RTRFM 92.1 Live** plays
-the station's live stream (the FM simulcast) on your Squeezebox players.
+The plugin adds **RTRFM 92.1** to the LMS Radio menu. Inside it:
 
-On-demand programs and episode track lists are in development.
+- **RTRFM 92.1 Live** plays the station's live stream (the FM simulcast).
+- **Programs** lists RTRFM's programs; pick one to see its episodes from the last 28 days
+  and play any of them.
+
+Episode track lists and more on-demand details are in development.
 
 ## Disclaimer
 
