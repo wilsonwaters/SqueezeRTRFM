@@ -2,7 +2,7 @@
 
 ## Currently in flight
 **RESUMED 2026-09-26** (paused ~05:10 for stakeholder quota).
-- #4 L1 — PR #16: main merged into branch (c21f9ff, t/13 reconciled, check.sh green); runtime verifier resumed.
+- #5 L2 `feat/L2-live-metadata`: implementation dispatched (+ HTTP.pm quiet option, fix blank live title).
 - #2 F2 — PR #15 (36379cc, CI green incl. release dry run; local repo-install test PASS): independent review running. Post-merge: dispatch `release.yml` on `main` with `{"dry_run": false}` → v0.1.0; verify asset sha1 = repo.xml `<sha>`; re-dispatch expects no-op.
 - #8 O3 `feat/O3-tracklists`, #10 O5 `feat/O5-show-artwork`: implementers resumed.
 - Next: F2 review + runtime verify; merge L1 → dispatch L2; merge O3 → dispatch O4, O6; release v0.1.0 after F2.
@@ -23,6 +23,7 @@
 | O6 | #11 | ondemand | M | #6, #7 (soft #8) |
 
 ## Last 5 completions
+- 2026-09-26 — #4 L1 merged (PR #16, squash d716ecf): review APPROVE, runtime PASS on merged-with-main c21f9ff (both streams play, on-air/next matches site, favourite survives restart, 1.75 s cold menu).
 - 2026-09-26 — #7 O2 merged (PR #14, squash 4cb41ec): review APPROVE, runtime PASS; **IC-1 PASS** (web UI browse → play episode → seek → favourite replay after restart) → brief criterion 2 met.
 - 2026-09-26 — #6 O1 merged (PR #13, squash 1cb1cbb): review APPROVE (leak + cover(0) fixed pre-merge), runtime PASS (play, seek 1800, fallback metadata, unavailable handling, favourite after restart, direct + proxied).
 - 2026-09-26 — #1 F1 merged (PR #12, squash a8c59ba): review APPROVE (4 minor findings fixed pre-merge: anchored URL validation, 25 s hook timeout, $cb outside eval, Playlist stub), runtime PASS (stream1 plays via JSON-RPC and web UI).
