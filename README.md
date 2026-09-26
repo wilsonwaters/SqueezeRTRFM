@@ -52,8 +52,8 @@ the station. For the station itself, visit <https://rtrfm.com.au/>.
    **RTRFM 92.1** and click **Apply**.
 4. LMS asks you to confirm installing a plugin from a third-party repository ("You are about to
    install: … Only install extensions from authors whom you trust. …"). Click **OK**.
-5. LMS downloads the plugin, checks it, and says "Changes will take place at the next
-   application restart". Restart LMS: click the link in that message, or restart it the way
+5. LMS downloads the plugin, checks it, and asks to restart (a dialog with **Restart now** and
+   **Restart later**). Click **Restart now**, or choose **Restart later** and restart LMS the way
    you normally do. Then close the settings window (**Close**).
 6. Open **Radio → RTRFM 92.1** on any player or in the web interface.
 
@@ -80,8 +80,9 @@ interface, open the item's details (click its name) to see it, with the show's d
 ### Programs and episodes
 
 **Programs** lists RTRFM's current line-up from rtrfm.com.au, A–Z, with each show's artwork and
-time slot. (If rtrfm.com.au can't be reached, it lists the programs from RTRFM's Airnet program
-guide instead, without artwork.)
+time slot. (The time slot is a second line, which the Default web interface doesn't show in lists;
+Material and hardware players do, and every program page repeats it. If rtrfm.com.au can't be
+reached, the list comes from RTRFM's Airnet program guide instead, without artwork.)
 
 Open a program to see, in order:
 
