@@ -37,14 +37,16 @@ package Plugins::RTRFM::EpisodeWindow;
 #           one per (slug, date): a check that is already queued or running is shared.
 #         - Time budget: CHECK_BUDGET seconds after the call, the episodes that are still
 #           unchecked are reported as 'unknown'; their checks carry on in the background (same
-#           limits) and cache their outcome for the next open. Restream::resolve has no timeout option and
-#           HTTP.pm waits up to 15 s, so this is what bounds a cold menu load: Airnet plus at most
+#           limits, but behind the checks a later open waits for) and cache their outcome for the
+#           next open. Restream::resolve has no timeout option and HTTP.pm waits up to 15 s, so
+#           this is what bounds a cold menu load: Airnet plus at most
 #           8 s (20 checks are 5 rounds of 4, measured at about 1.25 s a round through a slow
 #           proxy, 6.3 s in all), under 10 s even when rzz hangs, far inside XMLBrowser's 35 s.
 
 use strict;
 use warnings;
 
+use List::Util ();
 use Time::HiRes ();
 
 use Slim::Utils::Cache;
@@ -191,7 +193,7 @@ sub _perthDateTime {
 # Availability
 # ---------------------------------------------------------------------------
 
-my @queue;           # keys of checks waiting for a free slot, oldest first
+my @queue;           # keys of checks waiting for a free slot, oldest first (see _pump for the order)
 my %checks;          # key => { slug, date, waiters => [ coderef, ... ] }, queued or running
 my $inFlight = 0;
 
@@ -207,13 +209,21 @@ sub checkAvailability {
 	my $finish = sub {
 		return if $done++;
 
-		Slim::Utils::Timers::killSpecific($timer) if $timer;
+		# the timer (an EV watcher in LMS) keeps its callback, which holds this closure, after it
+		# has fired or been killed: drop it to break the cycle
+		if ($timer) {
+			Slim::Utils::Timers::killSpecific($timer);
+			undef $timer;
+		}
 
 		# the checks that are still queued or running no longer report to this call
 		for my $key ( keys %waiter ) {
 			my $check = $checks{$key} or next;
 			$check->{waiters} = [ grep { $_ != $waiter{$key} } @{ $check->{waiters} } ];
 		}
+
+		# the waiters hold %waiter: empty it to break that cycle too
+		%waiter = ();
 
 		$cb->( [ map { { episode => $_, status => $status{ _key($_) } || 'unknown' } } @episodes ] );
 	};
@@ -264,10 +274,13 @@ sub _enqueue {
 	push @queue, $key;
 }
 
-# Start queued checks while fewer than MAX_IN_FLIGHT are running.
+# Start queued checks while fewer than MAX_IN_FLIGHT are running. Checks an open is waiting for
+# go first, oldest first; checks nobody waits for any more (left over from an open whose time
+# budget ran out) only run when no such check is queued, so they cannot starve a later open.
 sub _pump {
 	while ( $inFlight < MAX_IN_FLIGHT && @queue ) {
-		my $key   = shift @queue;
+		my $next  = List::Util::first { my $check = $checks{ $queue[$_] }; $check && @{ $check->{waiters} } } 0 .. $#queue;
+		my $key   = splice( @queue, defined $next ? $next : 0, 1 );
 		my $check = $checks{$key} or next;
 
 		$inFlight++;

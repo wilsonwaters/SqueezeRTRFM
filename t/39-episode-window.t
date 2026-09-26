@@ -3,7 +3,8 @@
 # from Airnet's episode starts (weekly, Mon-Fri, after-midnight, irregular shows), the 28-day
 # window of Airnet and synthesised episodes (edges, today and the end + 10 min rule, Airnet wins
 # on a date, the synthesised hash shape), the rzz availability check (hide / keep / flag, at most
-# 4 in flight, cache TTLs, the time budget, shared checks, the candidate cap), and
+# 4 in flight, cache TTLs, the time budget, shared checks, the candidate cap, an open's state is
+# freed once it has called back, an open's own checks go before leftover background checks), and
 # OnDemand::_episodesFeed on top of it (items from _episodeItem, metadata writes, empty and
 # error items, exactly one callback).
 #
@@ -131,6 +132,25 @@ my $REAL_RESOLVE = \&Plugins::RTRFM::Restream::resolve;
 sub restoreResolve {
 	no warnings 'redefine';
 	*Plugins::RTRFM::Restream::resolve = $REAL_RESOLVE;
+}
+
+# ---- leak detection ----
+#
+# guardedCb($collector, \$freed): a checkAvailability callback that forwards to $collector and
+# holds an object that sets $freed when it is destroyed, i.e. once nothing references the
+# callback (and so the state of the open that holds it) any more.
+
+{
+	package RTRFMTest::DestroyGuard;
+	sub new     { my ( $class, $flag ) = @_; return bless { flag => $flag }, $class }
+	sub DESTROY { ${ $_[0]->{flag} } = 1 }
+}
+
+sub guardedCb {
+	my ( $c, $freed ) = @_;
+	my $guard   = RTRFMTest::DestroyGuard->new($freed);
+	my $forward = $c->cb;
+	return sub { my $keep = $guard; $forward->(@_) };
 }
 
 # ---- feeds ----
@@ -312,6 +332,21 @@ subtest 'candidates: a show still on air is not synthesised yet' => sub {
 	my $noThu24 = sub { $_[0]->{date} ne '2026-09-24' };
 	ok( !( grep { $_->{date} eq '2026-09-24' } @{ candidatesAt( 'uplate', perth('2026-09-24 03:00:00'), $noThu24 ) } ), 'Up Late at 03:00: today\'s not synthesised while on air' );
 	is( candidatesAt( 'uplate', perth('2026-09-24 04:10:00'), $noThu24 )->[0]->{date}, '2026-09-24', 'Up Late at 04:10: today\'s listed first' );
+};
+
+subtest 'candidates: an Airnet episode dated today skips the end + 10 min rule' => sub {
+	reset_all();
+
+	my $episodes = airnet('saturdayjazz');
+	my $slots    = Plugins::RTRFM::EpisodeWindow::inferSlots($episodes);
+	my $today    = { slug => 'saturdayjazz', date => '2026-09-26', hhmm => '0900', start => '2026-09-26 09:00:00', end => '2026-09-26 11:00:00', duration => 7200, title => 'Saturday Jazz today', description => undef };
+	my $at       = perth('2026-09-26 11:05:00');
+
+	is_deeply( dates( Plugins::RTRFM::EpisodeWindow::candidates( $episodes, $slots, $at ) ), ymd(qw(09-19 09-12 09-05 08-29)), 'at 11:05 without an Airnet entry for today: not synthesised yet' );
+
+	my $c = Plugins::RTRFM::EpisodeWindow::candidates( [ @$episodes, $today ], $slots, $at );
+	is_deeply( dates($c), ymd(qw(09-26 09-19 09-12 09-05 08-29)), 'at 11:05 with Airnet\'s own 09-26 entry: listed (the rule is for synthesised episodes only)' );
+	is( $c->[0], $today, 'as Airnet\'s hash, untouched' );
 };
 
 subtest 'candidates: Airnet wins, one per date, window edges, cap' => sub {
@@ -526,6 +561,75 @@ subtest 'availability: no more than 35 candidates are checked' => sub {
 	$c = collector();
 	Plugins::RTRFM::EpisodeWindow::checkAvailability( [], $c->cb );
 	is_deeply( [ $c->args(0) ], [ [] ], 'no episodes: called back at once with []' );
+};
+
+subtest 'availability: an open\'s callback and state are freed once it has called back' => sub {
+	reset_all();
+	stubResolve( sub { 'defer' } );
+
+	my @episodes = map { { slug => 'leak', date => "2026-09-0$_" } } 1 .. 6;
+
+	# every check answered within the budget (the budget timer is cancelled)
+	my $freed = 0;
+	my $c     = collector();
+	Plugins::RTRFM::EpisodeWindow::checkAvailability( [ @episodes[ 0 .. 2 ] ], guardedCb( $c, \$freed ) );
+	ok( !$freed, 'while its checks run: the callback is held' );
+	1 while answerDeferred();
+	is( $c->count, 1, 'answered in time: one callback' );
+	ok( $freed, 'answered in time: the callback, and the state it is held by, is freed' );
+
+	# the budget runs out while checks are still running and queued
+	clearCache();
+	$freed = 0;
+	$c     = collector();
+	Plugins::RTRFM::EpisodeWindow::checkAvailability( \@episodes, guardedCb( $c, \$freed ) );
+	advanceTime(8.1);
+	is( $c->count, 1, 'budget expired: one callback' );
+	is( scalar @DEFERRED, 4, 'with 4 checks still running (and 2 queued)' );
+	ok( $freed, 'budget expired: the callback and state are freed at once' );
+
+	1 while answerDeferred();
+	is( $c->count, 1, 'late answers: no second callback' );
+	is( scalar @RESOLVES, 3 + 6, 'the background checks still finish' );
+	is( scalar( grep { defined availCache("leak:$_->{date}") } @episodes ), 6, 'and cache their outcome' );
+	is( scalar( () = Slim::Utils::Timers->pending ), 0, 'no timer left' );
+};
+
+subtest 'availability: an open\'s own checks go before checks left over from an expired budget' => sub {
+	reset_all();
+	stubResolve( sub { 'defer' } );
+
+	# rzz is slow: the first open's budget runs out with 4 checks running and 6 queued
+	my @first = map { { slug => 'first', date => "2026-09-1$_" } } 0 .. 9;
+	my $a = collector();
+	Plugins::RTRFM::EpisodeWindow::checkAvailability( \@first, $a->cb );
+	advanceTime(8.1);
+	is( $a->count, 1, 'first open: called back when its budget ran out' );
+	is_deeply( [@RESOLVES], [ map { "first:$_->{date}" } @first[ 0 .. 3 ] ], 'first open: 4 checks running, 6 left over in the queue' );
+
+	# a later open: two checks of its own, and one it shares with a leftover (the last queued)
+	my @second = ( { slug => 'second', date => '2026-09-21' }, { slug => 'second', date => '2026-09-22' }, $first[9] );
+	my $b = collector();
+	Plugins::RTRFM::EpisodeWindow::checkAvailability( \@second, $b->cb );
+	is( scalar @DEFERRED, 4, 'second open: still 4 in flight' );
+
+	answerDeferred() for 1 .. 4;
+	is_deeply(
+		[ @RESOLVES[ 4 .. 7 ] ],
+		[ 'first:2026-09-19', 'second:2026-09-21', 'second:2026-09-22', 'first:2026-09-14' ],
+		'as slots free up, the second open\'s 3 checks start first (in queue order), then the leftovers'
+	);
+
+	answerDeferred() for 1 .. 3;
+	is( $b->count, 1, 'second open: called back once its own checks are answered, leftovers still pending' );
+	is_deeply( [ map { $_->{status} } @{ ( $b->args(0) )[0] || [] } ], [ ('available') x 3 ], 'with every status known' );
+
+	1 while answerDeferred();
+	is_deeply( [ @RESOLVES[ 8 .. $#RESOLVES ] ], [ map { "first:2026-09-1$_" } 5 .. 8 ], 'then the other leftovers, oldest first' );
+	is( scalar @RESOLVES, 12, 'each checked once' );
+	is( $MAX_IN_FLIGHT, 4, 'never more than 4 in flight' );
+	is( scalar( grep { defined availCache("first:$_->{date}") } @first ), 10, 'the leftovers\' outcomes are cached' );
+	is( $a->count, 1, 'first open: no second callback' );
 };
 
 subtest 'availability: the real Restream::resolve over HTTP' => sub {
