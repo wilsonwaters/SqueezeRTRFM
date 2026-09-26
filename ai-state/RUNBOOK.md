@@ -287,3 +287,20 @@ decisions), `network.asynchttp`, `plugin.rtrfm`. Set them back to `WARN` afterwa
 - Throwaway plugin loaded from the symlink, played, fetched HTTPS/HTTP, and was then removed.
 - Headless Chromium screenshot of `http://localhost:9000/` returned 200, title "Lyrion Music Server",
   with DevPlayer selected and no wizard.
+
+## Sharing the test bed between agents
+
+There is exactly one LMS + DevPlayer. Any agent that re-links the plugin, restarts LMS or plays audio must hold the
+test-bed lock, and must run the dev scripts from the **main checkout** (`/home/user/SqueezeRTRFM/dev/…`) so logs/pids
+resolve to the running instance, pointing `PLUGIN_SRC` at its own worktree:
+
+```bash
+/home/user/SqueezeRTRFM/dev/testbed-lock.sh acquire <TASK-ID>          # waits (default 30 min) if busy
+PLUGIN_SRC=<worktree>/RTRFM /home/user/SqueezeRTRFM/dev/link-plugin.sh --restart
+# ... runtime checks via dev/rpc.sh, dev/browser/screenshot.mjs, dev/logs.sh ...
+/home/user/SqueezeRTRFM/dev/rpc.sh 00:00:00:00:00:01 '["stop"]'
+/home/user/SqueezeRTRFM/dev/link-plugin.sh --restart                   # back to the main checkout
+/home/user/SqueezeRTRFM/dev/testbed-lock.sh release <TASK-ID>
+```
+
+Stale locks (> 60 min) are broken automatically. Keep lock hold times short.
