@@ -65,9 +65,18 @@ sub routeLineup {
 	);
 }
 
+# rzz answers the availability check that _episodesFeed makes since O6 (see
+# t/39-episode-window.t): audio for every date except today's (2026-09-26) Saturday Jazz, so the
+# list is Airnet's four episodes.
+sub routeRzz {
+	route( 'https://restreams.rtrfm.com.au/rzz?n=saturdayjazz&d=2026-09-26', content => '{"u":"https://restreams.rtrfm.com.au/shows/saturdayjazz_2026-09-26.mp4?st=abc&e=1790391804"}' );
+	route( qr{^https://restreams\.rtrfm\.com\.au/rzz\?}, content => '{"u":"https://restreams.rtrfm.com.au/shows/saturdayjazz_2026-09-19.mp3?st=abc&e=1790391804"}' );
+}
+
 sub routeAirnet {
 	route( "$BASE/programs", file => 'ondemand/programs.json' );
 	route( "$BASE/programs/saturdayjazz/episodes", file => 'ondemand/episodes-saturdayjazz.json' );
+	routeRzz();
 }
 
 sub routeShowPage { route( $SJ_PAGE, file => 'ondemand/show-saturdayjazz.html' ) }
@@ -369,7 +378,7 @@ subtest '_programMenu: no tease image, so og:image is awaited and passed on' => 
 	is( Plugins::RTRFM::Util::getEpisodeMeta( 'saturdayjazz', '2026-09-12' )->{image}, $SJ_OG_IMAGE, 'readable through getEpisodeMeta' );
 	is( $program->{image}, undef, 'the passthrough program hash is not modified' );
 
-	my @urls = map { $_->{url} } requests();
+	my @urls = grep { !m{/rzz\?} } map { $_->{url} } requests();    # (then the rzz availability checks)
 	is_deeply( \@urls, [ $SJ_PAGE, "$BASE/programs/saturdayjazz/episodes" ], 'the show page is fetched before the episodes' );
 
 	# and when that show page fails too: station icon, no header
