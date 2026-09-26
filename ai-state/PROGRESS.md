@@ -2,7 +2,8 @@
 
 ## Currently in flight
 **RESUMED 2026-09-26** (paused ~05:10 for stakeholder quota).
-- #9 O4 `feat/O4-track-now-playing`: implementation dispatched (+ stale current_title fix).
+- #9 O4 → PR #20 (CI green; position-based track metadata, boundary timers, getCurrentTitle fix): review + runtime verification running.
+- #11 O6 `feat/O6-28-day-window` (stretch): implementation dispatched in parallel.
 - Next: F2 review + runtime verify; merge L1 → dispatch L2; merge O3 → dispatch O4, O6; release v0.1.0 after F2.
 
 ## Issue map
