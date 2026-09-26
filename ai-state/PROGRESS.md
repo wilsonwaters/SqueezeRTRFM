@@ -4,7 +4,7 @@
 **RESUMED 2026-09-26** (paused ~05:10 for stakeholder quota).
 - #5 L2 → PR #18 (CI green; HTTP.pm quiet option + blank-title fix via Info title-change callback): review (scrutinising title callback) + runtime verification running.
 - #8 O3 → PR #17: review APPROVE (favourite-title minor fixed by orchestrator at 462cda4); runtime verification/IC-2 running. Note for O4: `current_title` stays "Play episode" when started from the submenu — fix with title refresh / getCurrentTitle.
-- #10 O5 `feat/O5-show-artwork`: implementer running.
+- #10 O5 → PR #19 (CI green; 46-show line-up with artwork, program header): review + runtime verification running. Likely trivial OnDemand.pm/t/33 conflict with #17 for whichever merges second.
 - Next: F2 review + runtime verify; merge L1 → dispatch L2; merge O3 → dispatch O4, O6; release v0.1.0 after F2.
 
 ## Issue map
