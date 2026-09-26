@@ -41,6 +41,19 @@ package Plugins::RTRFM::Tracklist;
 #       Pure. '<offset> · <Artist> – <Title> (<Release>)', e.g.
 #       '3:00 · Chris Foster – Looking Sideways (In Motion)'. ' (<Release>)' is left out
 #       without a release, '<Artist> – ' without an artist, '<offset> · ' when offsetUnknown.
+#
+#   cached($slug, $start)
+#       Synchronous cache read: the list fetch() cached for this episode (an arrayref, possibly
+#       empty), or undef when nothing is cached or $slug/$start is invalid. Never makes a
+#       request. $start as for fetch().
+#
+#   trackAt(\@tracks, $pos)
+#       Pure. ($current, $next) at playback position $pos (seconds from the episode start;
+#       undef or negative counts as 0): $current is the last track whose offset is <= $pos
+#       (of tracks with the same offset, the later one in the list), $next the first track
+#       whose offset is > $pos; either may be undef, and an empty list gives (undef, undef).
+#       Tracks flagged offsetUnknown are ignored. The list needn't be sorted (a sorted copy is
+#       used; the input is never modified).
 
 use strict;
 use warnings;
@@ -78,7 +91,7 @@ sub fetch {
 	my ( $date, $h, $m, $s ) = @start;
 	$start = "$date $h:$m:$s";
 
-	my $key    = "tracklist:$slug:$start";
+	my $key    = _cacheKey( $slug, $start );
 	my $cache  = _cache();
 	my $cached = $cache->get($key);
 	return $cb->($cached) if ref $cached eq 'ARRAY';
@@ -124,6 +137,19 @@ sub fetch {
 		},
 	);
 }
+
+sub cached {
+	my ( $slug, $start ) = @_;
+
+	return undef unless _isValidSlug($slug);
+	my ( $date, $h, $m, $s ) = _splitStart($start) or return undef;
+
+	my $tracks = _cache()->get( _cacheKey( $slug, "$date $h:$m:$s" ) );
+	return ref $tracks eq 'ARRAY' ? $tracks : undef;
+}
+
+# $start: normalised 'YYYY-MM-DD HH:MM:SS'
+sub _cacheKey { "tracklist:$_[0]:$_[1]" }
 
 # 1 hour for an empty list or an episode that started less than 2 days ago, else 24 hours
 sub _ttl {
@@ -180,13 +206,37 @@ sub normalise {
 		push @tracks, \%track;
 	}
 
-	# stable sort by offset: ties keep their list order
+	return [ _sortByOffset(@tracks) ];
+}
+
+# Stable sort by offset: ties keep their list order.
+sub _sortByOffset {
 	my $i = 0;
-	return [
+	return
 		map  { $_->[1] }
 		sort { $a->[1]->{offset} <=> $b->[1]->{offset} || $a->[0] <=> $b->[0] }
-		map  { [ $i++, $_ ] } @tracks
-	];
+		map  { [ $i++, $_ ] } @_;
+}
+
+sub trackAt {
+	my ( $tracks, $pos ) = @_;
+
+	$pos = 0 unless defined $pos && !ref $pos && $pos =~ /\A[0-9]+(?:\.[0-9]+)?\z/;
+
+	my @known = grep { ref $_ eq 'HASH' && !$_->{offsetUnknown} && defined $_->{offset} } ref $tracks eq 'ARRAY' ? @$tracks : ();
+
+	my ( $current, $next );
+	for my $track ( _sortByOffset(@known) ) {
+		if ( $track->{offset} <= $pos ) {
+			$current = $track;
+		}
+		else {
+			$next = $track;
+			last;
+		}
+	}
+
+	return ( $current, $next );
 }
 
 sub formatOffset {
