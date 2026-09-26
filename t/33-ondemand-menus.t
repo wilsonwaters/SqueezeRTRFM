@@ -170,20 +170,35 @@ subtest '_episodesFeed / _episodeItem: Saturday Jazz at 2026-09-26 11:40 Perth' 
 		'names carry the date and the title or show name, newest first'
 	);
 
+	# episode rows are links to the episode submenu that also play (see t/35-episode-submenu.t)
+	my $program = $jazzItem->{passthrough}->[0];
+
 	is_deeply(
 		$items->[0],
 		{
-			name      => "Sat 19 Sep $ENDASH Saturday Jazz with Laura Igglesden",
-			line1     => 'Saturday Jazz with Laura Igglesden',
-			line2     => "Sat 19 Sep $MIDDOT 09:00${ENDASH}11:00",
-			type      => 'audio',
-			url       => 'rtrfm://episode/saturdayjazz/2026-09-19/0900',
-			play      => 'rtrfm://episode/saturdayjazz/2026-09-19/0900',
-			on_select => 'play',
-			duration  => 7200,
-			image     => $ICON,
+			name        => "Sat 19 Sep $ENDASH Saturday Jazz with Laura Igglesden",
+			line1       => 'Saturday Jazz with Laura Igglesden',
+			line2       => "Sat 19 Sep $MIDDOT 09:00${ENDASH}11:00",
+			type        => 'link',
+			url         => \&Plugins::RTRFM::OnDemand::_episodeMenu,
+			passthrough => [
+				$program,
+				{
+					slug        => 'saturdayjazz',
+					date        => '2026-09-19',
+					hhmm        => '0900',
+					start       => '2026-09-19 09:00:00',
+					end         => '2026-09-19 11:00:00',
+					duration    => 7200,
+					title       => 'Saturday Jazz with Laura Igglesden',
+					description => undef,
+				},
+			],
+			play        => 'rtrfm://episode/saturdayjazz/2026-09-19/0900',
+			duration    => 7200,
+			image       => $ICON,
 		},
-		'first item: exact keys (no description when Airnet has none), rtrfm:// URL in url and play'
+		'first item: exact keys, rtrfm:// URL in play'
 	);
 
 	is_deeply(
@@ -192,19 +207,30 @@ subtest '_episodesFeed / _episodeItem: Saturday Jazz at 2026-09-26 11:40 Perth' 
 			name        => "Sat 12 Sep $ENDASH Saturday Jazz",
 			line1       => 'Saturday Jazz',
 			line2       => "Sat 12 Sep $MIDDOT 09:00${ENDASH}11:00",
-			type        => 'audio',
-			url         => 'rtrfm://episode/saturdayjazz/2026-09-12/0900',
+			type        => 'link',
+			url         => \&Plugins::RTRFM::OnDemand::_episodeMenu,
+			passthrough => [
+				$program,
+				{
+					slug        => 'saturdayjazz',
+					date        => '2026-09-12',
+					hhmm        => '0900',
+					start       => '2026-09-12 09:00:00',
+					end         => '2026-09-12 11:00:00',
+					duration    => 7200,
+					title       => undef,
+					description => 'Presented by Ben Bartholomew. Featuring tracks from the debut album by local ensemble the Kirsten Sym Undectet.',
+				},
+			],
 			play        => 'rtrfm://episode/saturdayjazz/2026-09-12/0900',
-			on_select   => 'play',
 			duration    => 7200,
-			description => 'Presented by Ben Bartholomew. Featuring tracks from the debut album by local ensemble the Kirsten Sym Undectet.',
 			image       => $ICON,
 		},
-		'second item: null title falls back to the show name; plain-text description'
+		'second item: null title falls back to the show name; plain-text description passed through'
 	);
 
 	is_deeply(
-		[ map { $_->{url} } @$items ],
+		[ map { $_->{play} } @$items ],
 		[ map { "rtrfm://episode/saturdayjazz/$_/0900" } qw(2026-09-19 2026-09-12 2026-09-05 2026-08-29) ],
 		'URLs from Util::episodeUrl(slug, date, hhmm)'
 	);
@@ -268,13 +294,13 @@ subtest 'Drivetime and Up Late items' => sub {
 
 	my $items = items_of( open_feed( \&Plugins::RTRFM::OnDemand::_episodesFeed, $DRIVETIME ), 'Drivetime' );
 	is( scalar @$items, 11, 'Drivetime: 11 items' );
-	is( $items->[0]->{url}, 'rtrfm://episode/drivetime/2026-09-25/1700', 'first URL is the latest weekday at 1700' );
+	is( $items->[0]->{play}, 'rtrfm://episode/drivetime/2026-09-25/1700', 'first URL is the latest weekday at 1700' );
 	is( $items->[0]->{name}, "Fri 25 Sep $ENDASH Drivetime", 'first name' );
 	is( $items->[0]->{line2}, "Fri 25 Sep $MIDDOT 17:00${ENDASH}19:00", 'first line2' );
-	ok( !( grep { $_->{url} =~ m{/2026-09-26/} } @$items ), 'nothing dated today' );
+	ok( !( grep { $_->{play} =~ m{/2026-09-26/} } @$items ), 'nothing dated today' );
 
 	$items = items_of( open_feed( \&Plugins::RTRFM::OnDemand::_episodesFeed, { slug => 'uplate', name => 'Up Late', image => undef } ), 'Up Late' );
-	is( $items->[0]->{url},   'rtrfm://episode/uplate/2026-09-25/0100', 'Up Late dated by its Perth start date' );
+	is( $items->[0]->{play},  'rtrfm://episode/uplate/2026-09-25/0100', 'Up Late dated by its Perth start date' );
 	is( $items->[0]->{line2}, "Fri 25 Sep $MIDDOT 01:00${ENDASH}04:00", 'Up Late line2' );
 
 	clearTime();
@@ -357,7 +383,7 @@ subtest 're-opening within the TTL: no HTTP request, window recomputed at Perth 
 	$items = items_of( open_feed( \&Plugins::RTRFM::OnDemand::_episodesFeed, $DRIVETIME ), 'Drivetime after midnight' );
 	is( requestCount(), 1, 're-opening within the TTL makes no HTTP request' );
 	is( scalar @$items, 11, 'after Perth midnight the cached list gives the new window: 11' );
-	is( $items->[0]->{url}, 'rtrfm://episode/drivetime/2026-09-25/1700', '09-25 now listed first' );
+	is( $items->[0]->{play}, 'rtrfm://episode/drivetime/2026-09-25/1700', '09-25 now listed first' );
 
 	clearTime();
 };
