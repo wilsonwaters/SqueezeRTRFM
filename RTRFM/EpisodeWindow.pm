@@ -36,11 +36,11 @@ package Plugins::RTRFM::EpisodeWindow;
 #         - At most MAX_IN_FLIGHT resolves are in flight, for all callers together, and at most
 #           one per (slug, date): a check that is already queued or running is shared.
 #         - Time budget: CHECK_BUDGET seconds after the call, the episodes that are still
-#           unchecked are reported as 'unknown' (queued checks nobody waits for are dropped;
-#           running ones still cache their outcome). Restream::resolve has no timeout option and
-#           HTTP.pm waits up to 15 s, so this is what keeps a cold menu load (Airnet plus about
-#           20 checks, usually 1-3 s) under 10 s even when rzz hangs, far inside XMLBrowser's
-#           35 s.
+#           unchecked are reported as 'unknown'; their checks carry on in the background (same
+#           limits) and cache their outcome for the next open. Restream::resolve has no timeout option and
+#           HTTP.pm waits up to 15 s, so this is what bounds a cold menu load: Airnet plus at most
+#           8 s (20 checks are 5 rounds of 4, measured at about 1.25 s a round through a slow
+#           proxy, 6.3 s in all), under 10 s even when rzz hangs, far inside XMLBrowser's 35 s.
 
 use strict;
 use warnings;
@@ -62,7 +62,7 @@ use constant MAX_CANDIDATES  => 35;
 use constant MAX_IN_FLIGHT   => 4;
 use constant AVAILABLE_TTL   => 24 * 3600;  # seconds
 use constant UNAVAILABLE_TTL => 3600;       # seconds
-use constant CHECK_BUDGET    => 6;          # seconds
+use constant CHECK_BUDGET    => 8;          # seconds
 
 my $log = logger('plugin.rtrfm');
 
@@ -209,7 +209,7 @@ sub checkAvailability {
 
 		Slim::Utils::Timers::killSpecific($timer) if $timer;
 
-		# stop waiting for the checks that are still queued or running
+		# the checks that are still queued or running no longer report to this call
 		for my $key ( keys %waiter ) {
 			my $check = $checks{$key} or next;
 			$check->{waiters} = [ grep { $_ != $waiter{$key} } @{ $check->{waiters} } ];
@@ -269,11 +269,6 @@ sub _pump {
 	while ( $inFlight < MAX_IN_FLIGHT && @queue ) {
 		my $key   = shift @queue;
 		my $check = $checks{$key} or next;
-
-		if ( !@{ $check->{waiters} } ) {
-			delete $checks{$key};
-			next;
-		}
 
 		$inFlight++;
 

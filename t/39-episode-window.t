@@ -478,21 +478,28 @@ subtest 'availability: the time budget' => sub {
 	stubResolve( sub { 'defer' } );
 
 	my $c = open_feed( $FEED, $DRIVETIME );
-	advanceTime(5.9);
-	is( $c->count, 0, 'rzz hangs: no callback after 5.9 s' );
+	advanceTime(7.9);
+	is( $c->count, 0, 'rzz hangs: no callback after 7.9 s' );
 
 	advanceTime(0.2);
-	my $items = items_of( $c, 'after 6 s' );
-	is( scalar @$items, 20, 'after 6 s: all 20 episodes' );
+	my $items = items_of( $c, 'after 8 s' );
+	is( scalar @$items, 20, 'after 8 s: all 20 episodes' );
 	is( scalar( grep { $_->{line2} =~ /\Q$UNKNOWN\E\z/ } @$items ), 20, 'all flagged "Availability unknown"' );
-	ok( ( grep { $_->{level} eq 'WARN' && $_->{message} =~ /longer than 6 s/ } Slim::Utils::Log->messages ), 'a warning is logged' );
+	ok( ( grep { $_->{level} eq 'WARN' && $_->{message} =~ /longer than 8 s/ } Slim::Utils::Log->messages ), 'a warning is logged' );
 
-	# the 4 running checks answer late: cached, no second callback, the queued 16 are dropped
+	# the checks carry on in the background (still at most 4 in flight) and cache their answers
+	is( scalar @RESOLVES, 4, 'still 4 in flight' );
 	1 while answerDeferred();
 	is( $c->count, 1, 'late answers: no second callback' );
-	is( scalar @RESOLVES, 4, 'queued checks nobody waits for are dropped' );
-	is( scalar( grep { defined availCache("drivetime:$_") } @{ dates( candidatesAt( 'drivetime', $NOW ) ) } ), 4, 'the late answers are cached' );
+	is( scalar @RESOLVES, 20, 'the other 16 are checked afterwards, once each' );
+	is( $MAX_IN_FLIGHT, 4, 'never more than 4 in flight' );
+	is( scalar( grep { defined availCache("drivetime:$_") } @{ dates( candidatesAt( 'drivetime', $NOW ) ) } ), 20, 'and cached' );
 	is( scalar( () = Slim::Utils::Timers->pending ), 0, 'no timer left' );
+
+	@RESOLVES = ();
+	$items = items_of( open_feed( $FEED, $DRIVETIME ), 're-open' );
+	is( scalar @RESOLVES, 0, 're-opening: zero resolves' );
+	is( scalar( grep { $_->{line2} =~ /Availability unknown/ } @$items ), 0, 'and nothing flagged' );
 
 	# all answered in time: the budget timer is cancelled
 	reset_all();
