@@ -1,8 +1,19 @@
 # Project Progress
 
 ## Currently in flight
-- Wave 2 (ondemand) implementation agents: #8 O3 `feat/O3-tracklists`, #10 O5 `feat/O5-show-artwork` (parallel; disjoint OnDemand.pm builders).
-- Wave 1 implementation agents (parallel worktrees): #2 F2 `feat/F2-packaging`, #4 L1 → PR #16 (review APPROVE; runtime verification running; t/13 conflict with #14 expected — second to merge reconciles).
+**PAUSED 2026-09-26 ~05:10 (stakeholder request, quota).** No agents running; test bed idle, lock free, main checkout linked.
+
+Resume from here (in order):
+1. **#4 L1 — PR #16**: review APPROVE; runtime verification was interrupted after confirming both streams play
+   (stream1 1.65→11.86 s, stream2 1.74→11.89 s). Re-run the runtime verifier (web UI + favourite + log checks), then
+   merge. Expect a `t/13-plugin-feed.t` conflict with main (O2 merged): keep L1's "first two items" check and add O2's
+   Programs assertion at index 2.
+2. **#2 F2 — PR #15** (`feat/F2-packaging` @ 36379cc, pushed, merged with main): implementation essentially done; the
+   agent was stopped while finalising the PR description. Check the PR body (remove any auto footer), CI, then dispatch
+   review + runtime verification (repo-install test). After merge: dispatch the release workflow → v0.1.0.
+3. **#8 O3** and **#10 O5**: dispatched then stopped before writing any files — re-dispatch from scratch (same prompts:
+   branches `feat/O3-tracklists`, `feat/O5-show-artwork`).
+4. Then wave 3: #5 L2 (after L1; includes HTTP.pm quiet-log option), #9 O4 (after O3), #11 O6 (after O3), then #3 F3.
 
 ## Issue map
 | Task | Issue | Stream | Size | Depends on |
