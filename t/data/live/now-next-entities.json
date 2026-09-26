@@ -1,0 +1,6 @@
+{"success":true,"data":{
+ "current":{"time":"11.00am - 1.00pm","name":"Black &amp; Blue","startTime":"2026-09-26T11:00:00+08:00","link":"https://rtrfm.com.au/shows/blackandblue/","thumbnail":"https://rtrfm.com.au/wp-content/uploads/2012/12/BlackAndBlue.jpg","day":""},
+ "next":{"time":"1.00pm - 3.00pm","name":"Rock&#8217;n&#8217;Roll Rumble","startTime":"2026-09-26T13:00:00+08:00","link":"https://rtrfm.com.au/shows/rocknrollrumble/","thumbnail":"https://rtrfm.com.au/wp-content/uploads/2012/12/Rumble.jpg","day":""},
+ "stream_url":"https://live.rtrfm.com.au/stream1",
+ "current_show":{"name":"Black &amp; Blue","slug":"blackandblue","url":"https://rtrfm.com.au/shows/blackandblue/","short_description":"<p>Blues &#038; roots,\n <strong>old</strong> and new.</p><p>Every Saturday.</p>","friendly_days":"Saturdays","friendly_times":"11.00am - 1.00pm","start_time":"2026-09-26T11:00:00+08:00","end_time":"2026-09-26T13:00:00+08:00"},
+ "next_show":{"name":"Rock&#8217;n&#8217;Roll Rumble","slug":"rocknrollrumble","url":"https://rtrfm.com.au/shows/rocknrollrumble/","short_description":"Rock &amp; roll, rockabilly &#038; more.","friendly_days":"Saturdays","friendly_times":"1.00pm - 3.00pm","start_time":"2026-09-26T13:00:00+08:00","end_time":"2026-09-26T15:00:00+08:00"}}}

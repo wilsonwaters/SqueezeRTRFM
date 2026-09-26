@@ -16,12 +16,15 @@ package Slim::Networking::SimpleAsyncHTTP;
 #   { code => 200, content => '...', headers => { 'Content-Type' => '...' } }   # response
 #   { error => 'Timed out waiting for data' }                                 # transport error
 # A request with no matching route fails like a network error.
+# A response with defer => 1 is not answered straight away: the request is recorded and waits
+# until the test calls completeDeferred(), like a slow server (deferred() lists what waits).
 
 use strict;
 use warnings;
 
 our @REQUESTS;
 our @ROUTES;
+our @DEFERRED;    # requests waiting for completeDeferred(), each [ $http, $method, $url, $response ]
 
 my %MESSAGES = (
 	200 => 'OK', 204 => 'No Content', 301 => 'Moved Permanently', 302 => 'Found', 304 => 'Not Modified',
@@ -40,10 +43,33 @@ sub addRoute {
 sub reset {
 	@REQUESTS = ();
 	@ROUTES   = ();
+	@DEFERRED = ();
 	return;
 }
 
 sub requests { return @REQUESTS }
+
+# Requests waiting for completeDeferred() (URLs, oldest first).
+sub deferred { return map { $_->[2] } @DEFERRED }
+
+# Answer the waiting requests, oldest first, with their routed response (defer removed), or
+# with %override merged into it, e.g. completeDeferred(error => 'Timed out waiting for data').
+# Requests deferred by those callbacks wait for the next call. Returns how many were answered.
+sub completeDeferred {
+	my ( $class, %override ) = @_;
+
+	my @pending = @DEFERRED;
+	@DEFERRED = ();
+
+	for my $entry (@pending) {
+		my ( $http, $method, $url, $response ) = @$entry;
+		my %merged = ( %$response, %override );
+		delete $merged{defer};
+		$http->_respond( $method, $url, \%merged );
+	}
+
+	return scalar @pending;
+}
 
 # ---- real API ----
 
@@ -96,6 +122,18 @@ sub _request {
 	};
 
 	my $response = _route( $url, $method, $body );
+
+	if ( $response && $response->{defer} ) {
+		push @DEFERRED, [ $self, $method, $url, $response ];
+		return;
+	}
+
+	return $self->_respond( $method, $url, $response );
+}
+
+# Deliver $response (undef: no matching route) to the request's callbacks.
+sub _respond {
+	my ( $self, $method, $url, $response ) = @_;
 
 	if ( !$response ) {
 		$self->{error} = "No test fixture for $method $url";

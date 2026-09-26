@@ -125,26 +125,33 @@ subtest 'a failing init is logged and the plugin still loads' => sub {
 	ok( ( grep { $_->{message} =~ /Plugins::RTRFM::Live.*live init exploded/ } errors_logged() ), 'error logged with the hook name and reason' );
 };
 
-subtest 'default feed: the "RTRFM 92.1 Live" item' => sub {
+subtest 'default feed: the live items come first' => sub {
 	resetStubs();
 	my $c = feed();
 
 	is( $c->count, 1, 'callback called once' );
+
+	# the live items in detail: t/21-live-menu.t
+	my @live = @{ items_of($c) || [] }[ 0, 1 ];
 	is_deeply(
-		items_of($c),
-		[ {
-			name      => 'RTRFM 92.1 Live',
-			type      => 'audio',
-			url       => 'https://live.rtrfm.com.au/stream1',
-			on_select => 'play',
-			image     => 'plugins/RTRFM/html/images/icon.png',
-		}, {
-			name      => 'Programs',
-			type      => 'link',
-			url       => \&Plugins::RTRFM::OnDemand::_programsFeed,
-			image     => 'plugins/RTRFM/html/images/icon.png',
-		} ],
-		'one playable live item, then the OnDemand "Programs" link'
+		[ map { $_ && { name => $_->{name}, type => $_->{type}, url => $_->{url} } } @live ],
+		[
+			{ name => 'RTRFM 92.1 Live',    type => 'audio', url => 'https://live.rtrfm.com.au/stream1' },
+			{ name => 'RTRFM Infinite Mix', type => 'audio', url => 'https://live.rtrfm.com.au/stream2' },
+		],
+		'"RTRFM 92.1 Live" then "RTRFM Infinite Mix"'
+	);
+
+	# then the OnDemand items: the "Programs" link
+	is_deeply(
+		( items_of($c) || [] )->[2],
+		{
+			name  => 'Programs',
+			type  => 'link',
+			url   => \&Plugins::RTRFM::OnDemand::_programsFeed,
+			image => 'plugins/RTRFM/html/images/icon.png',
+		},
+		'then the OnDemand "Programs" link'
 	);
 };
 
