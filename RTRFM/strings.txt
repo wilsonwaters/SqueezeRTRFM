@@ -8,7 +8,7 @@ PLUGIN_RTRFM
 	EN	RTRFM 92.1
 
 PLUGIN_RTRFM_DESC
-	EN	Listen to RTRFM 92.1, Perth's independent community radio station: the live stream, on-demand episodes and track listings. Unofficial plugin, not affiliated with RTRFM.
+	EN	Listen to RTRFM 92.1, Perth's independent community radio station: the live stream and Infinite Mix with the show on air, programs with episodes from the last 28 days, and track lists. Unofficial plugin, not affiliated with RTRFM.
 
 PLUGIN_RTRFM_ERROR
 	EN	Sorry, part of the RTRFM menu could not be loaded. Please try again later.

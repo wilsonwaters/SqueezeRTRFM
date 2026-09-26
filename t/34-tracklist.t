@@ -388,6 +388,52 @@ subtest 'errors: 400/404/[] give [], other failures give an error' => sub {
 	clearTime();
 };
 
+subtest 'logging: an expected 400/404 is no warning, a real failure is exactly one' => sub {
+	# plugin.rtrfm at DEBUG for this subtest, so HTTP.pm's quiet DEBUG lines are recorded
+	local $Slim::Utils::Log::CATEGORIES{'plugin.rtrfm'} = { defaultLevel => 'DEBUG', description => 'PLUGIN_RTRFM' };
+
+	my $start = '2026-09-19 10:00:00';
+	my $url   = playlistUrl( 'saturdayjazz', $start );
+	my $warns = sub { scalar Slim::Utils::Log->messages( level => 'WARN', category => 'plugin.rtrfm' ) };
+	my $debug = sub { grep { $_->{message} =~ /^HTTP request failed: $_[0]\b/ } Slim::Utils::Log->messages( level => 'DEBUG', category => 'plugin.rtrfm' ) };
+
+	# today's or a just-aired episode: Airnet answers 400 "No such episode" until it publishes it
+	for my $case (
+		[ 'HTTP 400', { code => 400, file => 'ondemand/playlist-400.json', headers => { 'Content-Type' => 'application/json' } }, 400 ],
+		[ 'HTTP 404', { code => 404, content => 'Not Found' },                                                                   404 ],
+	) {
+		my ( $name, $response, $code ) = @$case;
+		reset_all();
+		route( $url, %$response );
+
+		my $c = fetchTracks( 'saturdayjazz', $start );
+		is_deeply( [ $c->args(0) ], [ [] ], "$name: \$cb->([])" );
+		is( ( requests() )[0]->{params}->{quiet}, undef, "$name: quiet is not passed on to SimpleAsyncHTTP" );
+		is( $warns->(), 0, "$name: no WARN" );
+		ok( scalar $debug->($code), "$name: HTTP.pm logged the failed request at DEBUG (quiet)" );
+	}
+
+	for my $case (
+		[ 'HTTP 500',   { code => 500, content => '' } ],
+		[ 'bad JSON',   { code => 200, content => '<html>oops</html>' } ],
+		[ 'not a list', { code => 200, content => '{"message":"odd"}' } ],
+		[ 'timeout',    { error => 'Timed out waiting for data' } ],
+	) {
+		my ( $name, $response ) = @$case;
+		reset_all();
+		route( $url, %$response );
+
+		my $c = fetchTracks( 'saturdayjazz', $start );
+		my ( $tracks, $error ) = $c->args(0);
+		is( $tracks, undef, "$name: no tracks" );
+		my @warns = Slim::Utils::Log->messages( level => 'WARN', category => 'plugin.rtrfm' );
+		is( scalar @warns, 1, "$name: exactly one WARN" );
+		like( $warns[0] ? $warns[0]->{message} : '', qr/\Q$url\E/, "$name: the WARN names the URL" );
+	}
+
+	clearTime();
+};
+
 subtest 'cache TTLs under the fake clock' => sub {
 	# resetStubs() drops the cache instances, so look the namespace up each time
 	my $cached = sub { Slim::Utils::Cache->new('rtrfm')->get(shift) };
