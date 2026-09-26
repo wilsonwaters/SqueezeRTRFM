@@ -1,7 +1,7 @@
 # Project Progress
 
 ## Currently in flight
-- Wave 1 implementation agents (parallel worktrees): #2 F2 `feat/F2-packaging`, #4 L1 → PR #16 (under review + runtime verification), #6 O1 → PR #13 (review APPROVE; fixing minor leak in scan callback + cover(0) nit; runtime verification running), #7 O2 → PR #14 (under review; runtime verifier also running IC-1 on a local O1+O2 combination).
+- Wave 1 implementation agents (parallel worktrees): #2 F2 `feat/F2-packaging`, #4 L1 → PR #16 (review APPROVE; runtime verification running; t/13 conflict with #14 expected — second to merge reconciles), #6 O1 → PR #13 (review APPROVE; leak + cover(0) fixed at bf095a6; runtime verification running), #7 O2 → PR #14 (review APPROVE; runtime verifier running O2 + IC-1 on a local O1+O2 combination). Nit for O6: move filterWindow/empty check inside `_respond` eval in `_episodesFeed`.
 
 ## Issue map
 | Task | Issue | Stream | Size | Depends on |
