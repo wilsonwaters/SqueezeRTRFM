@@ -12,6 +12,8 @@ package Plugins::RTRFM::HTTP;
 #     front of rtrfm.com.au and airnet.org.au answers 403 to "libwww-perl/..." agents.
 #   - Timeout defaults to 15 seconds (opts: timeout). opts cache/expires are passed through to
 #     SimpleAsyncHTTP (cache => 1, expires => seconds or '1h').
+#   - A failed request is logged at WARN, or at DEBUG with opts quiet => 1 (for callers that log
+#     failures themselves); the error callback is called either way.
 #   - JSON is decoded whatever the Content-Type (the restream service answers
 #     application/javascript); a UTF-8 byte-order mark and surrounding whitespace are ignored.
 #     The decoded value must be an object or an array.
@@ -39,7 +41,7 @@ my $log = logger('plugin.rtrfm');
 sub getJSON {
 	my ( $url, $cb, $ecb, $opts ) = @_;
 
-	_request( GET => $url, [], undef, _jsonHandler( $url, $cb, $ecb ), $ecb, $opts );
+	_request( GET => $url, [], undef, _jsonHandler( $url, $cb, $ecb, $opts ), $ecb, $opts );
 }
 
 sub postFormJSON {
@@ -49,7 +51,7 @@ sub postFormJSON {
 		POST => $url,
 		[ 'Content-Type' => 'application/x-www-form-urlencoded' ],
 		_encodeForm($form),
-		_jsonHandler( $url, $cb, $ecb ),
+		_jsonHandler( $url, $cb, $ecb, $opts ),
 		$ecb, $opts
 	);
 }
@@ -66,7 +68,7 @@ sub _request {
 
 	my $onError = sub {
 		my ( $http, $error ) = @_;
-		_fail( $ecb, sprintf( 'HTTP request failed: %s (%s)', $error || 'unknown error', $url ), $http );
+		_fail( $ecb, sprintf( 'HTTP request failed: %s (%s)', $error || 'unknown error', $url ), $http, $opts->{quiet} );
 	};
 
 	my %params = ( timeout => $opts->{timeout} || DEFAULT_TIMEOUT );
@@ -93,14 +95,15 @@ sub _request {
 
 # Success callback for JSON requests: decode, then call exactly one of $cb / $ecb.
 sub _jsonHandler {
-	my ( $url, $cb, $ecb ) = @_;
+	my ( $url, $cb, $ecb, $opts ) = @_;
+	my $quiet = $opts && $opts->{quiet};
 
 	return sub {
 		my $http = shift;
 		my ( $data, $error ) = _decodeJSON( $http->content );
 
 		if ( defined $error ) {
-			return _fail( $ecb, "$error ($url)", $http );
+			return _fail( $ecb, "$error ($url)", $http, $quiet );
 		}
 
 		$cb->( $data, $http );
@@ -132,9 +135,14 @@ sub _decodeJSON {
 }
 
 sub _fail {
-	my ( $ecb, $message, $http ) = @_;
+	my ( $ecb, $message, $http, $quiet ) = @_;
 
-	$log->warn($message);
+	if ($quiet) {
+		main::DEBUGLOG && $log->is_debug && $log->debug($message);
+	}
+	else {
+		$log->warn($message);
+	}
 	$ecb->( $message, $http ) if $ecb;
 
 	return;

@@ -19,6 +19,7 @@ use Slim::Utils::Log;
 use Slim::Utils::Strings qw(cstring);
 use Slim::Utils::Timers;
 
+use Plugins::RTRFM::LiveMetadata;
 use Plugins::RTRFM::NowPlaying;
 use Plugins::RTRFM::Util;
 
@@ -26,7 +27,7 @@ use constant MENU_DEADLINE => 3;    # seconds
 
 my $log = logger('plugin.rtrfm');
 
-sub init { }
+sub init { Plugins::RTRFM::LiveMetadata->init() }
 
 sub menuItems {
 	my ( $class, $client, $cb, $args ) = @_;

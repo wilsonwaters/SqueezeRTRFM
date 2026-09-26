@@ -27,7 +27,8 @@ package Plugins::RTRFM::NowPlaying;
 #
 # Logging: HTTP.pm logs one DEBUG line per request (it contains the endpoint URL, which no other
 # line here does). A failed update is logged at WARN once per run of consecutive failures, the
-# rest of the run at DEBUG.
+# rest of the run at DEBUG; requests are made with HTTP.pm's quiet option, so HTTP.pm logs their
+# failures at DEBUG rather than adding a WARN of its own for each one.
 
 use strict;
 use warnings;
@@ -78,6 +79,7 @@ sub fetch {
 				$info ? _succeeded($info) : _failed('Unexpected response (no show data)');
 			},
 			sub { _failed( $_[0] ) },
+			{ quiet => 1 },
 		);
 		1;
 	} or do {

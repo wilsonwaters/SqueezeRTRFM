@@ -74,8 +74,9 @@ sub own_messages {
 	return grep { $_->{message} =~ m{^Now/next show info} } Slim::Utils::Log->messages( level => $level, category => 'plugin.rtrfm' );
 }
 
+# HTTP.pm's request lines ("GET <url>") for the endpoint
 sub request_lines {
-	return grep { $_->{message} =~ /get_current_and_next_show/ } Slim::Utils::Log->messages( level => 'DEBUG' );
+	return grep { $_->{message} =~ /^GET \S*get_current_and_next_show/ } Slim::Utils::Log->messages( level => 'DEBUG' );
 }
 
 # every recorded request: exactly the endpoint URL, GET, through HTTP.pm (non-libwww UA), uncached
@@ -431,7 +432,8 @@ subtest 'logging: one DEBUG request line per request; WARN once per run of failu
 	$NP->fetch( sub { } );
 	is( scalar own_messages('WARN'), 2, 'a new run after a success warns again' );
 
-	# HTTP errors: HTTP.pm logs each failed request itself; NowPlaying adds one WARN per run
+	# HTTP errors: NowPlaying asks HTTP.pm to log failed requests at DEBUG (quiet => 1), so the
+	# whole run has one WARN, NowPlaying's
 	fresh_start();
 	serve( code => 500, content => 'oops' );
 	for ( 1 .. 3 ) {
@@ -439,9 +441,22 @@ subtest 'logging: one DEBUG request line per request; WARN once per run of failu
 		advanceTime(21);
 	}
 	is( scalar own_messages('WARN'),  1, 'HTTP 500 run: NowPlaying warns once' );
+	is( scalar Slim::Utils::Log->messages( level => 'WARN', category => 'plugin.rtrfm' ), 1, 'HTTP 500 run: one WARN in total (HTTP.pm quiet)' );
+	is( scalar( grep { $_->{message} =~ /^HTTP request failed: 500/ } Slim::Utils::Log->messages( level => 'DEBUG' ) ), 3, "HTTP 500 run: HTTP.pm's failure lines at DEBUG" );
 	is( scalar own_messages('DEBUG'), 2, 'HTTP 500 run: then DEBUG' );
 	is( scalar request_lines(), 3, 'HTTP 500 run: one DEBUG request line per request' );
 	ok( !( grep { $_->{message} =~ /get_current_and_next_show/ } own_messages('WARN'), own_messages('DEBUG') ), "NowPlaying's own lines don't repeat the endpoint" );
+
+	# timeouts and invalid bodies likewise
+	for my $response ( [ error => 'Timed out waiting for data' ], [ code => 200, content => '<html></html>' ] ) {
+		fresh_start();
+		serve(@$response);
+		for ( 1 .. 3 ) {
+			$NP->fetch( sub { } );
+			advanceTime(21);
+		}
+		is( scalar Slim::Utils::Log->messages( level => 'WARN', category => 'plugin.rtrfm' ), 1, "@$response[0,1] run: one WARN in total" );
+	}
 
 	requests_ok('logging');
 	clearTime();
