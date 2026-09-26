@@ -16,3 +16,8 @@ _(none yet)_
    squeezelite in the container. Final acceptance on pi14 is the stakeholder's.
 3. **Git workflow** (2026-09-26) — Stakeholder allowed direct commits to `main`. `ai-state/` and scaffolding go
    straight to `main`; feature tasks go through PRs (branch → review agent → merge) per the methodology.
+4. **Git proxy limits** (2026-09-26) — From the container, pushing branches/commits works, but pushing tags and
+   deleting remote branches is refused, and the GitHub MCP has no "create release" tool. Releases must therefore
+   be cut by a GitHub Actions workflow (workflow_dispatch or version-bump trigger) using `GITHUB_TOKEN`.
+   A probe branch `feat/push-probe` (identical to `main` at 71a09c1) could not be deleted — stakeholder can
+   delete it in the GitHub UI.
