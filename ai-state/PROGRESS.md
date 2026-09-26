@@ -1,7 +1,7 @@
 # Project Progress
 
 ## Currently in flight
-- #1 F1 skeleton — implementation agent dispatched (worktree, branch `feat/F1-skeleton`).
+- #1 F1 skeleton — PR #12 open (CI green, impl runtime check passed); independent review + runtime verification agents running.
 
 ## Issue map
 | Task | Issue | Stream | Size | Depends on |
