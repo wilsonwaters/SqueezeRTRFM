@@ -29,11 +29,12 @@ package Plugins::RTRFM::ProtocolHandler;
 #   LMS has a cheap re-resolve hook: _Stream calls $handler->updateOnStream($song, $successCb,
 #   $failCb), if the handler has one, before every stream start, including seeks. We
 #   deliberately don't implement it while the expiry isn't enforced. If RTRFM starts
-#   enforcing it, a seek made more than ~10 s after the episode started would get HTTP 403:
-#   LMS logs the failed request (player.streaming.remote / player.source), shows its standard
-#   "problem connecting" message and stops; nothing crashes and nothing retries in a loop.
-#   The fix would then be an updateOnStream that calls Restream::resolve again and updates
-#   $song->streamUrl.
+#   enforcing it, a seek made more than ~10 s after the URL was resolved would get HTTP 403:
+#   LMS logs "Invalid response code (403) from remote stream" (player.streaming.remote or
+#   player.streaming.direct), shows its standard "problem connecting" message and stops (or
+#   moves on to the next playlist item). Nothing crashes, and LMS doesn't retry streams that
+#   have a duration. The fix would then be an updateOnStream that calls Restream::resolve
+#   again and updates $song->streamUrl.
 
 use strict;
 use warnings;
