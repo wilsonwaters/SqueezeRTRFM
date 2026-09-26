@@ -81,9 +81,10 @@ and checks the zip on every pull request anyway.
 
 ## Idempotency and repair
 
-- Real runs share one concurrency group and are never cancelled, so two runs for the same
-  version (a dispatch plus a push, or a re-run) run one after the other, and the second one
-  finds the release and ends with `nothing to do`.
+- Real runs share one concurrency group and a running release is never cancelled, so two
+  runs for the same version (a dispatch plus a push, or a re-run) run one after the other, and
+  the second one finds the release and ends with `nothing to do`. GitHub keeps only the newest
+  waiting run of the group; it was started for the newest commit, so nothing is lost.
 - A push that touches `install.xml` without changing the version finds the existing release
   and does nothing.
 - **Release exists but `repo.xml` is stale** (a run failed after creating the release, for

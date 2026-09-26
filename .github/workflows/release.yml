@@ -27,9 +27,10 @@ on:
 permissions:
   contents: write
 
-# Real releases share one group and are never cancelled, so two runs for one version are
-# serialised and the second finds the release and does nothing. Dry runs get a group of their
-# own and never wait for, or hold up, a real release.
+# Real releases share one group and a running one is never cancelled, so two runs for one
+# version are serialised and the second finds the release and does nothing. (GitHub keeps only
+# the newest waiting run of a group, which was started for the newest commit.) Dry runs get a
+# group of their own and never wait for, or hold up, a real release.
 concurrency:
   group: ${{ (github.event_name == 'pull_request' || inputs.dry_run) && format('release-dry-run-{0}', github.run_id) || 'release' }}
   cancel-in-progress: false
