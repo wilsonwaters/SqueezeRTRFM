@@ -1,0 +1,144 @@
+# Releasing SqueezeRTRFM
+
+Releases are made only by the **Release** workflow (`.github/workflows/release.yml`). It builds
+`RTRFM-<version>.zip`, creates the tag and GitHub Release `v<version>` with the zip attached,
+and then points `repo.xml` on `main` at that zip, which is what LMS users install from.
+
+Nobody builds, tags or uploads releases by hand. The workflow creates the tag itself because
+tags can't be pushed from the development container and no release-creation API is available
+there; inside GitHub Actions, `GITHUB_TOKEN` can do both.
+
+## How to release
+
+Versions are `X.Y.Z` (digits only: no `v` prefix, no `-beta` suffix) and only ever go up.
+There are two ways to cut a release; both release the version currently in
+`RTRFM/install.xml` on `main`.
+
+1. **Version-bump commit on `main`.** Change `<version>` in `RTRFM/install.xml` (and nothing
+   else) and get the commit onto `main`. A push to `main` that touches `RTRFM/install.xml`
+   starts the workflow.
+2. **Run the workflow.** In GitHub: **Actions → Release → Run workflow**, branch `main`,
+   leave *Dry run* unticked. Or through the REST API:
+
+   ```
+   POST /repos/wilsonwaters/SqueezeRTRFM/actions/workflows/release.yml/dispatches
+   {"ref":"main"}
+   ```
+
+   for example `curl -X POST -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" https://api.github.com/repos/wilsonwaters/SqueezeRTRFM/actions/workflows/release.yml/dispatches -d '{"ref":"main"}'`.
+   Add `"inputs":{"dry_run":"true"}` for a dry run. Running the workflow is how the first
+   release (`0.1.0`, already in `install.xml`) is cut, and how an interrupted release is
+   repaired.
+
+Real releases only run from `main`; a real run dispatched on another branch fails at once.
+
+## What the workflow does
+
+1. **Checks.** Runs the same checks as CI (`ci.yml`, i.e. `scripts/check.sh`); a failure stops
+   the run. Reads `V` from `RTRFM/install.xml` and fails unless it is `X.Y.Z`.
+2. **Guards.** Fails if `V` is lower than the version in `repo.xml` on the latest `main` (no
+   downgrades), if `repo.xml` on `main` has no `RTRFM` entry to update, or if tag `vV` exists
+   without a release.
+3. **Existing release.** If release `vV` already exists, it downloads its `RTRFM-V.zip` and
+   hashes it. If `repo.xml` on `main` already has `version="V"`, that asset's URL and its SHA1,
+   the run logs `nothing to do` and ends green. Otherwise it skips to step 7 using the
+   downloaded asset's SHA1 (the repair path). An existing release is never rebuilt or
+   re-uploaded.
+4. **Build.** Runs `scripts/build.sh` once and takes the SHA1 from `dist/RTRFM-V.zip.sha1`. The
+   zip is never rebuilt after it has been hashed.
+5. **Release.** Creates tag and release `vV` server-side with `gh release create`, on the commit
+   that was built, titled `RTRFM V`, with `RTRFM-V.zip` attached and GitHub-generated notes.
+6. **Verify.** Downloads the uploaded asset and compares its SHA1 with step 4's. On a mismatch
+   the run fails before `repo.xml` is touched.
+7. **repo.xml.** On top of the latest `main`: runs
+   `scripts/update-repo-xml.pl --version V --sha <sha1>` (with the release asset URL), checks
+   the result with `xmllint`, and commits **only** `repo.xml` as `github-actions[bot]` with the
+   message `Release vV: update repo.xml [skip ci]`. If the push is rejected because `main`
+   moved, it re-fetches, re-applies the change and retries, up to 3 times.
+
+The release is created before `repo.xml` is changed, so `repo.xml` never points at an asset
+that doesn't exist. If a run stops between the two, `repo.xml` is stale (still the previous
+release) but not broken, and the next run repairs it (step 3).
+
+Pushes made with `GITHUB_TOKEN` don't start workflows, so the `repo.xml` commit doesn't
+trigger another release; `[skip ci]` and the `paths` filter are extra guards.
+
+## Dry runs
+
+A dry run goes through steps 1–4 and step 7 up to, but not including, the commit. It creates
+no release, tag or commit. It prints the version, the zip name, its SHA1, the `unzip -l`
+listing and the `git diff` of `repo.xml`, and repeats them in the run summary.
+
+- Every pull request that changes `.github/workflows/release.yml`, `scripts/build.sh`,
+  `scripts/update-repo-xml.pl` or `repo.xml` gets a dry run. On a pull request the change is
+  applied to the pull request's merge commit.
+- **Actions → Release → Run workflow** with *Dry run* ticked (or `"inputs":{"dry_run":"true"}`
+  in the REST call) does a dry run on the chosen branch.
+
+Dry runs don't wait for real releases, and real releases don't wait for dry runs. If release
+`vV` already exists, a dry run shows the no-op or repair path instead of a build; CI builds
+and checks the zip on every pull request anyway.
+
+## Idempotency and repair
+
+- Real runs share one concurrency group and a running release is never cancelled, so two
+  runs for the same version (a dispatch plus a push, or a re-run) run one after the other, and
+  the second one finds the release and ends with `nothing to do`. GitHub keeps only the newest
+  waiting run of the group; it was started for the newest commit, so nothing is lost.
+- A push that touches `install.xml` without changing the version finds the existing release
+  and does nothing.
+- **Release exists but `repo.xml` is stale** (a run failed after creating the release, for
+  example on a rejected push): run the workflow again. It downloads the existing asset,
+  hashes it and updates `repo.xml` from it, without rebuilding or re-uploading anything.
+- **Tag exists without a release**: the workflow stops and asks for a human. Delete the tag in
+  GitHub (Code → Tags), then run the workflow again.
+
+## Verifying a release
+
+1. The release exists with the asset: `https://github.com/wilsonwaters/SqueezeRTRFM/releases/tag/vV`
+   lists `RTRFM-V.zip`.
+2. `repo.xml` on `main` points at it: `version="V"` and
+   `<url>https://github.com/wilsonwaters/SqueezeRTRFM/releases/download/vV/RTRFM-V.zip</url>`.
+3. The SHA1 of the downloaded asset equals `repo.xml`'s `<sha>`:
+
+   ```bash
+   V=0.1.0
+   curl -sSLO "https://github.com/wilsonwaters/SqueezeRTRFM/releases/download/v$V/RTRFM-$V.zip"
+   sha1sum "RTRFM-$V.zip"
+   curl -sSL https://raw.githubusercontent.com/wilsonwaters/SqueezeRTRFM/main/repo.xml | grep '<sha>'
+   ```
+
+4. Optionally, install it on a test LMS: `scripts/lms-repo-install.sh http://<lms>:9000
+   https://raw.githubusercontent.com/wilsonwaters/SqueezeRTRFM/main/repo.xml`, then restart
+   LMS. (raw.githubusercontent.com may serve the old `repo.xml` for a few minutes, and LMS
+   caches each repository file for 5 minutes.)
+
+## Prerequisites and troubleshooting
+
+- **Workflow permissions.** The workflow declares `permissions: contents: write`, but a
+  repository setting can still make `GITHUB_TOKEN` read-only. A **403** on creating the release
+  or on pushing `repo.xml` means: **Settings → Actions → General → Workflow permissions →
+  Read and write permissions**, save, then run the workflow again (it repairs `repo.xml` if the
+  release was already created).
+- **Branch protection.** `github-actions[bot]` must be allowed to push the `repo.xml` commit
+  straight to `main`. If `main` is protected, allow GitHub Actions to bypass the rule, or the
+  release is created but `repo.xml` stays stale.
+- **Non-fast-forward push.** Retried automatically (re-fetch, re-apply, up to 3 times). If it
+  still fails, run the workflow again.
+- **"version … is lower than … in repo.xml on main"**: `install.xml` has a version below the
+  last release. Bump it above the released version.
+- **"uploaded asset sha1 … differs"**: the uploaded file isn't the one that was built;
+  `repo.xml` was left alone. Bump the version and release again. Don't re-run the workflow
+  for the broken version: its repair path would publish the uploaded file's SHA1.
+
+## Rules
+
+- **Never reuse a version number.** LMS only offers an update when the version goes up, and
+  it caches downloads by name.
+- **Never hand-edit `sha`** (or `version`/`url`) in `repo.xml`. The workflow writes them; the
+  committed file starts with a 40-zero placeholder `sha` until the first release.
+- **Never replace an uploaded asset.** Installed copies were verified against the old SHA1.
+  Fix problems by bumping the version and releasing again.
+- **Feature pull requests never touch `<version>`** in `RTRFM/install.xml`. Changing it on
+  `main` releases it.
+- Release notes are generated by GitHub from the merged pull requests.
