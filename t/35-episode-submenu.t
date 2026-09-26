@@ -41,9 +41,18 @@ sub playlistUrl {
 	return "$BASE/programs/$slug/episodes/$date+$h%3A$m%3A00/playlists";
 }
 
+# rzz answers the availability check that _episodesFeed makes since O6 (see
+# t/39-episode-window.t): audio for every date except today's (2026-09-26) Saturday Jazz, so the
+# list is Airnet's four episodes.
+sub routeRzz {
+	route( 'https://restreams.rtrfm.com.au/rzz?n=saturdayjazz&d=2026-09-26', content => '{"u":"https://restreams.rtrfm.com.au/shows/saturdayjazz_2026-09-26.mp4?st=abc&e=1790391804"}' );
+	route( qr{^https://restreams\.rtrfm\.com\.au/rzz\?}, content => '{"u":"https://restreams.rtrfm.com.au/shows/saturdayjazz_2026-09-19.mp3?st=abc&e=1790391804"}' );
+}
+
 sub routeAll {
 	route( "$BASE/programs/saturdayjazz/episodes", file => 'ondemand/episodes-saturdayjazz.json' );
 	route( playlistUrl( 'saturdayjazz', '2026-09-19', '0900' ), file => 'ondemand/playlist-saturdayjazz-2026-09-19.json' );
+	routeRzz();
 }
 
 sub playlistRequests { grep { $_->{url} =~ m{/playlists$} } requests() }

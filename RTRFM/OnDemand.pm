@@ -13,8 +13,10 @@ package Plugins::RTRFM::OnDemand;
 #
 #     _programsFeed($client, $cb, $args)             items = map _programItem, programs
 #     _episodesFeed($client, $cb, $args, $program)   items = map _episodeItem, episodes in the
-#                                                    28-day window; writes the episode metadata
-#                                                    cache (Util::setEpisodeMeta) for each
+#                                                    28-day window that still have audio (see
+#                                                    Plugins::RTRFM::EpisodeWindow); writes the
+#                                                    episode metadata cache (Util::setEpisodeMeta)
+#                                                    for each
 #
 #   Item builders return one item hash:
 #
@@ -25,7 +27,8 @@ package Plugins::RTRFM::OnDemand;
 #     $program = { slug, name, image }   image is undef until artwork is available; other keys
 #                                        may be added. Builders pass the hash on untouched.
 #     $episode = as returned by Plugins::RTRFM::Airnet::episodes
-#                { slug, date, hhmm, start, end, duration, title, description }
+#                { slug, date, hhmm, start, end, duration, title, description }, or synthesised
+#                by Plugins::RTRFM::EpisodeWindow (same keys, title undef, plus synthetic => 1)
 #
 # Ownership of the builders after O2 (streams.md rule 6): O3 _episodeItem (+ episode submenu),
 # O5 _programsFeed/_programItem (+ program header), O6 _episodesFeed.
@@ -38,6 +41,7 @@ use Slim::Utils::Log;
 use Slim::Utils::Strings qw(cstring);
 
 use Plugins::RTRFM::Airnet;
+use Plugins::RTRFM::EpisodeWindow;
 use Plugins::RTRFM::ProtocolHandler;
 use Plugins::RTRFM::Shows;
 use Plugins::RTRFM::Util;
@@ -254,40 +258,75 @@ sub _programHeader {
 	return @items;
 }
 
+# The episodes of a program (O6): Airnet's episodes plus the dates synthesised from the show's
+# weekly slots, over [Perth today - 28 days, Perth today], each checked with rzz
+# (Plugins::RTRFM::EpisodeWindow). Episodes without audio are hidden; when the check fails the
+# episode stays, with "· Availability unknown" after line2. Synthesised episodes carry
+# synthetic => 1 (their submenu then shows "Track list not yet available" when Airnet has no
+# track list yet). Calls back exactly once.
 sub _episodesFeed {
 	my ( $client, $cb, $args, $program ) = @_;
+
+	my $called;
+	my $once = sub { $cb->(@_) unless $called++ };
 
 	Plugins::RTRFM::Airnet::episodes( $program->{slug}, sub {
 		my ( $episodes, $error ) = @_;
 
-		return _textFeed( $client, $cb, 'PLUGIN_RTRFM_LOAD_FAILED' ) unless $episodes;
+		return _textFeed( $client, $once, 'PLUGIN_RTRFM_LOAD_FAILED' ) unless $episodes;
 
-		# filter at build time, so a list cached before Perth midnight still gives today's window
-		my $listed = Plugins::RTRFM::Airnet::filterWindow($episodes);
+		# the window is computed at build time, so a list cached before Perth midnight still
+		# gives today's window
+		my $ok = eval {
+			my $candidates = Plugins::RTRFM::EpisodeWindow::candidates( $episodes, Plugins::RTRFM::EpisodeWindow::inferSlots($episodes) );
 
-		return _textFeed( $client, $cb, 'PLUGIN_RTRFM_NO_EPISODES' ) unless @$listed;
+			Plugins::RTRFM::EpisodeWindow::checkAvailability( $candidates, sub {
+				my $checked = shift;
+				_respond( $client, $once, sub { _episodeItems( $client, $program, $checked ) } );
+			} );
 
-		_respond( $client, $cb, sub {
-			my @items;
+			1;
+		};
 
-			for my $episode (@$listed) {
-				Plugins::RTRFM::Util::setEpisodeMeta( {
-					slug        => $episode->{slug},
-					date        => $episode->{date},
-					start       => $episode->{start},
-					duration    => $episode->{duration},
-					title       => defined $episode->{title} ? $episode->{title} : $program->{name} . ' ' . ENDASH . ' ' . Plugins::RTRFM::Util::friendlyDate( $episode->{date} ),
-					show        => $program->{name},
-					image       => $program->{image},
-					description => $episode->{description},
-				} );
-
-				push @items, _episodeItem( $client, $program, $episode );
-			}
-
-			return \@items;
-		} );
+		if ( !$ok ) {
+			$log->error( 'Building the RTRFM episode list failed: ' . ( $@ || 'unknown error' ) );
+			_textFeed( $client, $once, 'PLUGIN_RTRFM_LOAD_FAILED' );
+		}
 	} );
+}
+
+# Items for the checked episodes (EpisodeWindow::checkAvailability results), writing the episode
+# metadata cache for each listed episode; one NO_EPISODES text item when none is listed.
+sub _episodeItems {
+	my ( $client, $program, $checked ) = @_;
+
+	my @items;
+
+	for my $result (@$checked) {
+		next if $result->{status} eq 'unavailable';
+
+		my $episode = $result->{episode};
+
+		Plugins::RTRFM::Util::setEpisodeMeta( {
+			slug        => $episode->{slug},
+			date        => $episode->{date},
+			start       => $episode->{start},
+			duration    => $episode->{duration},
+			title       => defined $episode->{title} ? $episode->{title} : $program->{name} . ' ' . ENDASH . ' ' . Plugins::RTRFM::Util::friendlyDate( $episode->{date} ),
+			show        => $program->{name},
+			image       => $program->{image},
+			description => $episode->{description},
+		} );
+
+		my $item = _episodeItem( $client, $program, $episode );
+		$item->{line2} .= ' ' . MIDDOT . ' ' . cstring( $client, 'PLUGIN_RTRFM_AVAILABILITY_UNKNOWN' ) if $result->{status} eq 'unknown';
+
+		push @items, $item;
+	}
+
+	return [ { name => cstring( $client, 'PLUGIN_RTRFM_NO_EPISODES' ), type => 'text' } ] unless @items;
+
+	return \@items;
 }
 
 # An episode row: a link that opens the episode submenu (_episodeMenu) and, through 'play', also

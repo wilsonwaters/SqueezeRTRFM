@@ -11,6 +11,7 @@ use utf8;
 use RTRFMTest qw(:all);
 use Test::More;
 
+use JSON::PP ();
 use Time::Local qw(timegm);
 
 use Slim::Utils::Strings qw(string);
@@ -38,13 +39,31 @@ my $LOAD_FAILED = { name => "Couldn't load from RTRFM $ENDASH please try again l
 my $SATURDAY_JAZZ = { slug => 'saturdayjazz', name => 'Saturday Jazz', image => undef };
 my $DRIVETIME     = { slug => 'drivetime',    name => 'Drivetime',     image => undef };
 
+# rzz answers the availability check that _episodesFeed makes since O6 (see
+# t/39-episode-window.t). Here the audio exists only for the dates Airnet lists, so the dates O6
+# synthesises (e.g. today's Saturday Jazz, Drivetime before 11 Sep) are hidden and the lists
+# are Airnet's.
+my %AIRNET_DATES;
+for my $slug (qw(saturdayjazz drivetime uplate herstory)) {
+	$AIRNET_DATES{$slug}{ substr( $_->{start}, 0, 10 ) } = 1 for @{ JSON::PP->new->utf8->decode( fixture("ondemand/episodes-$slug.json") ) };
+}
+
 sub routeAll {
 	route( "$BASE/programs", file => 'ondemand/programs.json' );
 	route( "$BASE/programs/$_/episodes", file => "ondemand/episodes-$_.json" ) for qw(saturdayjazz drivetime uplate herstory);
 	route( "$BASE/programs/understorey/episodes", content => '[]' );
+	Slim::Networking::SimpleAsyncHTTP->addRoute(
+		qr{^https://restreams\.rtrfm\.com\.au/rzz\?},
+		sub {
+			my ( $slug, $date ) = $_[0] =~ /n=([^&]+)&d=(.+)$/;
+			my $ext = $AIRNET_DATES{$slug}{$date} ? 'mp3' : 'mp4';
+			return { code => 200, content => qq({"u":"https://restreams.rtrfm.com.au/shows/${slug}_$date.$ext?st=abc&e=1790391804"}) };
+		}
+	);
 }
 
-sub requestCount { scalar( () = requests() ) }
+# HTTP requests other than rzz availability checks
+sub requestCount { scalar grep { $_->{url} !~ m{/rzz\?} } requests() }
 
 # Run a feed builder the way XMLBrowser does: ($client, $callback, \%args, @passthrough).
 # Returns the collector.
@@ -374,16 +393,17 @@ subtest 'a builder that dies while building items still calls back once' => sub 
 subtest 're-opening within the TTL: no HTTP request, window recomputed at Perth midnight' => sub {
 	reset_all();
 
+	# since O6 the window includes today, and the window edges are tested in t/39-episode-window.t
 	setTime( $MIDNIGHT - 600 );    # Perth 23:50 on Friday the 25th
 	my $items = items_of( open_feed( \&Plugins::RTRFM::OnDemand::_episodesFeed, $DRIVETIME ), 'Drivetime before midnight' );
-	is( scalar @$items, 10, 'before Perth midnight: 10 (09-25 is today)' );
+	is( scalar @$items, 11, 'before Perth midnight: 11 (09-25 is today, and has ended)' );
 	is( requestCount(), 1, 'one request' );
 
 	advanceTime(900);    # Perth 00:05 on the 26th, well inside the 30 min TTL
 	$items = items_of( open_feed( \&Plugins::RTRFM::OnDemand::_episodesFeed, $DRIVETIME ), 'Drivetime after midnight' );
 	is( requestCount(), 1, 're-opening within the TTL makes no HTTP request' );
 	is( scalar @$items, 11, 'after Perth midnight the cached list gives the new window: 11' );
-	is( $items->[0]->{play}, 'rtrfm://episode/drivetime/2026-09-25/1700', '09-25 now listed first' );
+	is( $items->[0]->{play}, 'rtrfm://episode/drivetime/2026-09-25/1700', '09-25 listed first' );
 
 	clearTime();
 };
