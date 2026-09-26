@@ -17,6 +17,8 @@ package Plugins::RTRFM::Tracklist;
 #         $cb->(undef, $error)  any other failure: another HTTP error (5xx), a timeout, bad
 #                               JSON, a response that isn't a list, or an invalid slug or start
 #                               (then nothing is requested).
+#       Logging: the request is made with HTTP.pm's quiet option, so an expected 400/404 is
+#       logged at DEBUG/INFO only; any other failure is logged once, at WARN.
 #       Cached in the rtrfm cache namespace under 'tracklist:<slug>:<YYYY-MM-DD HH:MM:SS>':
 #         a non-empty list for 24 hours, or 1 hour if the episode started less than 2 days
 #         ago (presenters still edit their playlists); an empty list, 400 or 404 for 1 hour;
@@ -133,8 +135,13 @@ sub fetch {
 				return $found->( [] );
 			}
 
+			# HTTP.pm logged it at DEBUG only (quiet), so a real failure is warned about here
+			$log->warn( defined $error ? $error : "Airnet track list request failed ($url)" );
 			$cb->( undef, $error );
 		},
+		# quiet: the 400 for an episode Airnet hasn't published yet (today's, or a just-aired one)
+		# is expected, so HTTP.pm logs failures at DEBUG and only real failures are warned about
+		{ quiet => 1 },
 	);
 }
 

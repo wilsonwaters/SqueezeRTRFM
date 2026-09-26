@@ -19,12 +19,13 @@ jobs:
       # libxml2-utils: xmllint. liburi-perl: URI::Escape, bundled with LMS but not core Perl.
       # libhtml-parser-perl: HTML::Entities, also bundled with LMS, so the tests cover that
       # decoding path too. zip/unzip: package build and checks. shellcheck: scripts/*.sh.
+      # curl/jq: scripts/smoke.sh command-line tests (against a local fake LMS).
       # Everything else is core Perl or a t/lib stub/shim. The checks themselves run offline.
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libxml2-utils liburi-perl libhtml-parser-perl zip unzip shellcheck
+            libxml2-utils liburi-perl libhtml-parser-perl zip unzip shellcheck curl jq
 
       - name: Run scripts/check.sh
         run: scripts/check.sh

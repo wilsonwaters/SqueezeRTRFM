@@ -4,8 +4,11 @@ name: Release
 # Release v<version> with the zip attached, checks the uploaded asset, then points repo.xml on
 # main at it. The release always comes before the repo.xml commit, so repo.xml never names an
 # asset that doesn't exist; if a run stops in between, the next run repairs repo.xml from the
-# existing asset. Dry runs (pull requests, or dispatch with dry_run) build and show everything
-# but create no release, tag or commit. See RELEASING.md.
+# existing asset. The release notes are CHANGELOG.md's section for the version
+# (scripts/changelog-section.sh), or GitHub-generated notes when there is none. The repo.xml
+# commit is authored as the repository owner and pushed with GITHUB_TOKEN. Dry runs (pull
+# requests, or dispatch with dry_run) build and show everything, including the notes, but
+# create no release, tag or commit. See RELEASING.md.
 
 on:
   workflow_dispatch:
@@ -22,6 +25,8 @@ on:
       - '.github/workflows/release.yml'
       - 'scripts/build.sh'
       - 'scripts/update-repo-xml.pl'
+      - 'scripts/changelog-section.sh'
+      - 'CHANGELOG.md'
       - 'repo.xml'
 
 permissions:
@@ -173,11 +178,36 @@ jobs:
           echo "Action:  $ACTION (dry run: $DRY_RUN)"
           unzip -l "$ZIP"
 
+      # ---- release notes: CHANGELOG.md's section for V, else GitHub-generated notes ----
+      # Runs on every path, so a dry run always shows the notes a release of V would get.
+      - name: Release notes
+        run: |
+          notes="$RUNNER_TEMP/release-notes.md"
+          if scripts/changelog-section.sh "$V" > "$notes"; then
+            echo "NOTES_FILE=$notes" >> "$GITHUB_ENV"
+            source="CHANGELOG.md section [$V]"
+          else
+            rm -f "$notes"
+            source="GitHub-generated (CHANGELOG.md has no section [$V])"
+          fi
+          used="$([[ "${ACTION:-}" == release ]] && echo "used for the release" || echo "not used: release v$V already exists")"
+          echo "Release notes for v$V: $source; $used"
+          [[ -f "$notes" ]] && { echo "---- release notes ----"; cat "$notes"; echo "-----------------------"; }
+          {
+            echo "### Release notes for v$V"
+            echo
+            echo "Source: $source ($used)"
+            echo
+            if [[ -f "$notes" ]]; then cat "$notes"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # ---- 5. tag + release, created server-side on the built commit (never a git tag push) ----
       - name: Create release
         if: env.ACTION == 'release' && env.DRY_RUN != 'true'
         run: |
-          if ! gh release create "v$V" "$ZIP" --target "$GITHUB_SHA" --title "RTRFM $V" --generate-notes; then
+          notes=(--generate-notes)
+          [[ -n "${NOTES_FILE:-}" ]] && notes=(--notes-file "$NOTES_FILE")
+          if ! gh release create "v$V" "$ZIP" --target "$GITHUB_SHA" --title "RTRFM $V" "${notes[@]}"; then
             echo "::error::creating release v$V failed. A 403 means GITHUB_TOKEN is read-only: see RELEASING.md, Prerequisites (Settings > Actions > General > Workflow permissions > Read and write)."
             exit 1
           fi
@@ -231,11 +261,16 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # The commit is authored and committed as the repository owner; it is pushed with
+      # GITHUB_TOKEN, so it doesn't start another workflow run.
       - name: Commit and push repo.xml
         if: env.ACTION != 'none' && env.DRY_RUN != 'true'
+        env:
+          COMMIT_NAME: Wilson Waters
+          COMMIT_EMAIL: wilsonwaters@users.noreply.github.com
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name "$COMMIT_NAME"
+          git config user.email "$COMMIT_EMAIL"
           for attempt in 1 2 3 4; do
             if git diff --quiet -- repo.xml; then
               echo "repo.xml on main already points at v$V; nothing to commit"
@@ -250,7 +285,7 @@ jobs:
             fi
             echo "$out"
             if [[ "$out" == *403* || "$out" == *"denied"* || "$out" == *"protected branch"* ]]; then
-              echo "::error::push to main refused. See RELEASING.md, Prerequisites: GITHUB_TOKEN needs Read and write, and branch protection must let github-actions[bot] push repo.xml. Re-run the workflow afterwards; it repairs repo.xml from the existing release."
+              echo "::error::push to main refused. See RELEASING.md, Prerequisites: GITHUB_TOKEN needs Read and write, and branch protection must let GitHub Actions (github-actions[bot]) push repo.xml. Re-run the workflow afterwards; it repairs repo.xml from the existing release."
               exit 1
             fi
             if [[ $attempt -eq 4 ]]; then break; fi

@@ -11,12 +11,22 @@ there; inside GitHub Actions, `GITHUB_TOKEN` can do both.
 ## How to release
 
 Versions are `X.Y.Z` (digits only: no `v` prefix, no `-beta` suffix) and only ever go up.
+
+**First, update `CHANGELOG.md` before bumping the version.** Add a section for the new version
+at the top, below `## [Unreleased]`, in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+format: a `## [X.Y.Z] - YYYY-MM-DD` heading with `### Added` / `### Changed` / `### Fixed` /
+`### Known limitations` lists of the user-visible changes, and the compare links at the bottom
+(`[X.Y.Z]: …/compare/vPREVIOUS...vX.Y.Z`, and `[unreleased]` moved on to `vX.Y.Z...HEAD`). That
+section becomes the text of the GitHub Release; `scripts/changelog-section.sh X.Y.Z` prints
+exactly what will be used. The CHANGELOG update can be its own pull request, or part of the
+version-bump commit (the only other file that commit may touch).
+
 There are two ways to cut a release; both release the version currently in
 `RTRFM/install.xml` on `main`.
 
 1. **Version-bump commit on `main`.** Change `<version>` in `RTRFM/install.xml` (and nothing
-   else) and get the commit onto `main`. A push to `main` that touches `RTRFM/install.xml`
-   starts the workflow.
+   else, apart from finishing `CHANGELOG.md`) and get the commit onto `main`. A push to `main`
+   that touches `RTRFM/install.xml` starts the workflow.
 2. **Run the workflow.** In GitHub: **Actions → Release → Run workflow**, branch `main`,
    leave *Dry run* unticked. Or through the REST API:
 
@@ -27,8 +37,7 @@ There are two ways to cut a release; both release the version currently in
 
    for example `curl -X POST -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" https://api.github.com/repos/wilsonwaters/SqueezeRTRFM/actions/workflows/release.yml/dispatches -d '{"ref":"main"}'`.
    Add `"inputs":{"dry_run":"true"}` for a dry run. Running the workflow is how the first
-   release (`0.1.0`, already in `install.xml`) is cut, and how an interrupted release is
-   repaired.
+   release (`0.1.0`) was cut, and how an interrupted release is repaired.
 
 Real releases only run from `main`; a real run dispatched on another branch fails at once.
 
@@ -47,13 +56,17 @@ Real releases only run from `main`; a real run dispatched on another branch fail
 4. **Build.** Runs `scripts/build.sh` once and takes the SHA1 from `dist/RTRFM-V.zip.sha1`. The
    zip is never rebuilt after it has been hashed.
 5. **Release.** Creates tag and release `vV` server-side with `gh release create`, on the commit
-   that was built, titled `RTRFM V`, with `RTRFM-V.zip` attached and GitHub-generated notes.
+   that was built, titled `RTRFM V`, with `RTRFM-V.zip` attached. The release notes are the
+   body of `CHANGELOG.md`'s `## [V]` section (`scripts/changelog-section.sh V`); if there is no
+   such section, or it is empty, GitHub generates notes from the merged pull requests instead.
 6. **Verify.** Downloads the uploaded asset and compares its SHA1 with step 4's. On a mismatch
    the run fails before `repo.xml` is touched.
 7. **repo.xml.** On top of the latest `main`: runs
    `scripts/update-repo-xml.pl --version V --sha <sha1>` (with the release asset URL), checks
-   the result with `xmllint`, and commits **only** `repo.xml` as `github-actions[bot]` with the
-   message `Release vV: update repo.xml [skip ci]`. If the push is rejected because `main`
+   the result with `xmllint`, and commits **only** `repo.xml`, authored and committed as
+   `Wilson Waters <wilsonwaters@users.noreply.github.com>` (the repository owner), with the
+   message `Release vV: update repo.xml [skip ci]`. The push itself is made with
+   `GITHUB_TOKEN`, i.e. by GitHub Actions (`github-actions[bot]`). If the push is rejected because `main`
    moved, it re-fetches, re-applies the change and retries, up to 3 times.
 
 The release is created before `repo.xml` is changed, so `repo.xml` never points at an asset
@@ -67,10 +80,13 @@ trigger another release; `[skip ci]` and the `paths` filter are extra guards.
 
 A dry run goes through steps 1–4 and step 7 up to, but not including, the commit. It creates
 no release, tag or commit. It prints the version, the zip name, its SHA1, the `unzip -l`
-listing and the `git diff` of `repo.xml`, and repeats them in the run summary.
+listing, the release notes a release of that version would get (and where they come from) and
+the `git diff` of `repo.xml`, and repeats them in the run summary. The notes are shown even
+when release `vV` already exists.
 
 - Every pull request that changes `.github/workflows/release.yml`, `scripts/build.sh`,
-  `scripts/update-repo-xml.pl` or `repo.xml` gets a dry run. On a pull request the change is
+  `scripts/update-repo-xml.pl`, `scripts/changelog-section.sh`, `CHANGELOG.md` or `repo.xml`
+  gets a dry run. On a pull request the change is
   applied to the pull request's merge commit.
 - **Actions → Release → Run workflow** with *Dry run* ticked (or `"inputs":{"dry_run":"true"}`
   in the REST call) does a dry run on the chosen branch.
@@ -83,8 +99,14 @@ and checks the zip on every pull request anyway.
 
 - Real runs share one concurrency group and a running release is never cancelled, so two
   runs for the same version (a dispatch plus a push, or a re-run) run one after the other, and
-  the second one finds the release and ends with `nothing to do`. GitHub keeps only the newest
-  waiting run of the group; it was started for the newest commit, so nothing is lost.
+  the second one finds the release and ends with `nothing to do`.
+- GitHub keeps only the newest *waiting* run of the group and cancels an older waiting one. If
+  the version is bumped several times in quick succession (say 1.1.0, then 1.2.0 while the
+  1.1.0 run is still waiting), the older waiting run is cancelled: that middle version is
+  superseded and never gets a tag or a release. The newest version is still released and
+  `repo.xml` points at it, so this is harmless for LMS users, who only ever see the version in
+  `repo.xml`. To release every version, wait for each release run to finish before the next
+  bump.
 - A push that touches `install.xml` without changing the version finds the existing release
   and does nothing.
 - **Release exists but `repo.xml` is stale** (a run failed after creating the release, for
@@ -120,8 +142,9 @@ and checks the zip on every pull request anyway.
   or on pushing `repo.xml` means: **Settings → Actions → General → Workflow permissions →
   Read and write permissions**, save, then run the workflow again (it repairs `repo.xml` if the
   release was already created).
-- **Branch protection.** `github-actions[bot]` must be allowed to push the `repo.xml` commit
-  straight to `main`. If `main` is protected, allow GitHub Actions to bypass the rule, or the
+- **Branch protection.** GitHub Actions (`github-actions[bot]`, the `GITHUB_TOKEN` identity)
+  must be allowed to push the `repo.xml` commit straight to `main`; the commit's author
+  doesn't matter for this. If `main` is protected, allow GitHub Actions to bypass the rule, or the
   release is created but `repo.xml` stays stale.
 - **Non-fast-forward push.** Retried automatically (re-fetch, re-apply, up to 3 times). If it
   still fails, run the workflow again.
@@ -141,4 +164,5 @@ and checks the zip on every pull request anyway.
   Fix problems by bumping the version and releasing again.
 - **Feature pull requests never touch `<version>`** in `RTRFM/install.xml`. Changing it on
   `main` releases it.
-- Release notes are generated by GitHub from the merged pull requests.
+- **Update `CHANGELOG.md` before bumping the version.** Its section for the version is the
+  release notes; without one, GitHub generates notes from the merged pull requests.
