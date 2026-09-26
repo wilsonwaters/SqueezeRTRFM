@@ -3,7 +3,7 @@
 ## Currently in flight
 **RESUMED 2026-09-26** (paused ~05:10 for stakeholder quota).
 - #22 filed (follow-up, S): fetch show page + episodes concurrently in `_programMenu` (serial path only for shows without line-up artwork; not blocking v1.0).
-- #3 F3: implementation dispatched (docs, smoke.sh, CHANGELOG, release-commit authorship, Tracklist quiet 400).
+- #3 F3 → PR #23 (c2a3ed1; implementer hit the session usage limit after opening the PR; orchestrator verified: check.sh 321 tests PASS, CI green incl. release dry run, smoke.sh 9/9 PASS on test bed): independent review running. Then: bump install.xml → 1.0.0, release v1.0.0, clean-profile install from GitHub + smoke, final system verification.
 - Next: F2 review + runtime verify; merge L1 → dispatch L2; merge O3 → dispatch O4, O6; release v0.1.0 after F2.
 
 ## Issue map
