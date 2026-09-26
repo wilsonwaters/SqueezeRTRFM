@@ -11,7 +11,8 @@ package Plugins::RTRFM::ProtocolHandler;
 #     (Slim::Utils::Scanner::Remote) scan that MP3, which gives LMS the bitrate and, from
 #     Content-Length, the duration. In the scan callback the signed URL goes into
 #     $song->streamUrl and the track URL is set back to the exact rtrfm:// URL, so signed URLs
-#     never end up in menus, playlists or favourites;
+#     never end up in menus, playlists or favourites; the scanned title and embedded cover art
+#     are dropped in favour of getMetadataFor;
 #   - new() opens $song->streamUrl for LMS-proxied streaming; direct streaming uses
 #     $song->streamUrl through the inherited canDirectStreamSong;
 #   - seeking uses the inherited canSeek/getSeekData (byte offset from bitrate and duration);
@@ -77,16 +78,23 @@ sub scanUrl {
 
 		my $mp3Url = $result->{url};
 		my $song   = $args->{song};
+		my $client = $args->{client};
 
 		main::INFOLOG && $log->is_info && $log->info("Resolved $url, scanning the MP3");
 
+		# the wrapped callback is stored in $args, so it must not capture $args itself: that
+		# would be a reference cycle, leaking the args hash, the callback and the song every play
 		$args->{cb} = sub {
 			my $track = shift;
 
 			if ($track) {
 				# the scanned track's URL is the streamable (signed, maybe redirected) MP3 URL
 				$song->streamUrl( $track->url );
-				$track->title( $class->getMetadataFor( $args->{client}, $url )->{title} );
+				$track->title( $class->getMetadataFor( $client, $url )->{title} );
+
+				# ignore cover art embedded in the MP3's tags so the episode artwork from
+				# getMetadataFor is shown (as core Podcast does)
+				$track->cover(0);
 
 				# from now on the track is the rtrfm:// URL, byte for byte, so playlist and
 				# favourites matching keep working

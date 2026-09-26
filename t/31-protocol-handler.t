@@ -1,15 +1,17 @@
 #!/usr/bin/perl
 # Plugins::RTRFM::ProtocolHandler (rtrfm://episode/...): scanUrl resolves the signed MP3 through
 # rzz at play time, lets the core remote scanner scan it, then points $song->streamUrl at the
-# MP3 and restores the track URL to the exact rtrfm URL; unavailable/failed/invalid episodes
-# call back with the right error token without scanning. new() streams $song->streamUrl unless
-# redirected. getMetadataFor/getIcon never do network I/O.
+# MP3 and restores the track URL to the exact rtrfm URL (clearing embedded cover art) without
+# leaking the args hash; unavailable/failed/invalid episodes call back with the right error
+# token without scanning. new() streams $song->streamUrl unless redirected.
+# getMetadataFor/getIcon never do network I/O.
 
 use strict;
 use warnings;
 use utf8;
 
 use RTRFMTest qw(:all);
+use Scalar::Util qw(weaken);
 use Test::More;
 
 use Slim::Utils::Strings;
@@ -38,12 +40,12 @@ my %META = (
 );
 
 # A scanner that "scans" successfully: the scanned track is a new object for the scanned URL
-# (or for $redirectTo, as after an HTTP redirect).
+# (or for $redirectTo, as after an HTTP redirect), with cover art found in the MP3's tags.
 sub scanner_ok {
 	my $redirectTo = shift;
 	$Slim::Utils::Scanner::Remote::HANDLER = sub {
 		my ( $url, $args ) = @_;
-		my $track = FakeTrack->new( url => $redirectTo || $url, title => $args->{song}->track->title );
+		my $track = FakeTrack->new( url => $redirectTo || $url, title => $args->{song}->track->title, cover => 1 );
 		return $args->{cb}->( $track, undef );
 	};
 }
@@ -83,9 +85,31 @@ subtest 'scanUrl success, with and without /HHMM' => sub {
 		is( $song->streamUrl, $MP3, "$url: \$song->streamUrl is the signed MP3" );
 		is( $track->url, $url, "$url: track URL restored to the exact rtrfm URL" );
 		is( $track->title, $FALLBACK_TITLE, "$url: track title from getMetadataFor (URL fallback)" );
+		ok( defined $track->cover && !$track->cover, "$url: embedded cover art cleared (cover(0)), so getMetadataFor's artwork is used" );
 		is( $song->master->currentPlaylistUpdateTime, 1790396800.25, "$url: playlist update time bumped" );
 	}
 	clearTime();
+};
+
+subtest 'scanUrl success: the args hash is freed once the scan callback has run (no reference cycle)' => sub {
+	resetStubs();
+	route( $RZZ, file => 'ondemand/rzz-saturdayjazz-2026-09-19.json', %JS );
+	scanner_ok();
+
+	my $song = FakeSong->new('rtrfm://episode/saturdayjazz/2026-09-19/0900');
+	my $c    = collector();
+	my $args = { client => $song->master, song => $song, cb => $c->cb };
+	$PH->scanUrl( 'rtrfm://episode/saturdayjazz/2026-09-19/0900', $args );
+	is( $c->count, 1, 'scan callback ran' );
+
+	my $weakArgs = $args;
+	my $weakCb   = $args->{cb};
+	weaken($_) for $weakArgs, $weakCb;
+	undef $args;
+	Slim::Utils::Scanner::Remote->reset;    # the stub keeps each scan's args in @SCANS
+
+	ok( !defined $weakArgs, 'args hash freed' );
+	ok( !defined $weakCb,   'wrapped scan callback freed' );
 };
 
 subtest 'scanUrl success: track title comes from the metadata cache when primed' => sub {
@@ -278,6 +302,7 @@ sub new { my ( $class, %args ) = @_; return bless {%args}, $class }
 
 sub url   { my $self = shift; $self->{url}   = shift if @_; return $self->{url} }
 sub title { my $self = shift; $self->{title} = shift if @_; return $self->{title} }
+sub cover { my $self = shift; $self->{cover} = shift if @_; return $self->{cover} }
 
 package FakeMaster;
 
