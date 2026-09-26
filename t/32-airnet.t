@@ -15,6 +15,7 @@ use utf8;
 use RTRFMTest qw(:all);
 use Test::More;
 
+use Encode ();
 use POSIX ();
 use Time::Local qw(timegm);
 
@@ -123,7 +124,7 @@ subtest 'programs: the recorded 86 entries reduce to 57, normalised and sorted' 
 
 subtest 'programs: filter rules on synthetic entries (slug, archived, junk, dedupe)' => sub {
 	resetStubs();
-	route( $PROGRAMS, content => <<'JSON' );
+	my $json = <<'JSON';
 [
  {"slug":"zulu","name":"  Zulu   Time  ","broadcasters":"Z","archived":false},
  {"slug":"alpha","name":"alpha","broadcasters":"A","archived":false},
@@ -141,9 +142,12 @@ subtest 'programs: filter rules on synthetic entries (slug, archived, junk, dedu
  {"slug":"yourbroadcaster","name":"Real Name","broadcasters":"Your Broadcaster ","archived":false},
  {"slug":"addpresenter","name":"Another Name","broadcasters":"add presenter name here","archived":false},
  {"slug":"mid_dle-9","name":"Caf&eacute; &#8211; Middle","broadcasters":"","archived":false},
+ {"slug":"musica","name":"El Ritmo – Música","broadcasters":"","archived":false},
  "not a hash"
 ]
 JSON
+
+	route( $PROGRAMS, content => Encode::encode_utf8($json) );    # UTF-8 bytes, as on the wire
 
 	my ($programs) = getPrograms()->args(0);
 	is_deeply(
@@ -151,9 +155,10 @@ JSON
 		[
 			{ slug => 'alpha',     name => 'alpha' },
 			{ slug => 'mid_dle-9', name => "Café \x{2013} Middle" },
+			{ slug => 'musica',    name => "El Ritmo \x{2013} Música" },
 			{ slug => 'zulu',      name => 'Zulu Time' },
 		],
-		'invalid slugs, archived, junk and non-hash entries dropped; first entry per slug kept; names trimmed, collapsed and decoded; case-insensitive sort'
+		'invalid slugs, archived, junk and non-hash entries dropped; first entry per slug kept; names trimmed, collapsed, entity- and UTF-8-decoded; case-insensitive sort'
 	);
 };
 
