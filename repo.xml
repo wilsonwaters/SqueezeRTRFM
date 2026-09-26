@@ -10,7 +10,7 @@
       <category>radio</category>
       <icon>https://raw.githubusercontent.com/wilsonwaters/SqueezeRTRFM/main/RTRFM/HTML/EN/plugins/RTRFM/html/images/icon.png</icon>
       <url>https://github.com/wilsonwaters/SqueezeRTRFM/releases/download/v0.1.0/RTRFM-0.1.0.zip</url>
-      <sha>0000000000000000000000000000000000000000</sha>
+      <sha>bbf7fc7fc804783ea1cb3626e48e1cea467fdbdd</sha>
       <link>https://github.com/wilsonwaters/SqueezeRTRFM</link>
       <creator>Wilson Waters</creator>
     </plugin>
