@@ -2,7 +2,7 @@
 
 ## Currently in flight
 **RESUMED 2026-09-26** (paused ~05:10 for stakeholder quota).
-- #5 L2 → PR #18 (CI green; HTTP.pm quiet option + blank-title fix via Info title-change callback): review (scrutinising title callback) + runtime verification running.
+- #5 L2 → PR #18 (CI green; HTTP.pm quiet option + blank-title fix via Info title-change callback): review REQUEST_CHANGES (major: metadata re-push churn with both streams queued; minor: stuck poll state) → fix agent running; title callback approved; runtime verification running.
 - #9 O4 `feat/O4-track-now-playing`: implementation dispatched (+ stale current_title fix).
 - #10 O5 → PR #19 (CI green; 46-show line-up with artwork, program header): review + runtime verification running. Likely trivial OnDemand.pm/t/33 conflict with #17 for whichever merges second.
 - Next: F2 review + runtime verify; merge L1 → dispatch L2; merge O3 → dispatch O4, O6; release v0.1.0 after F2.

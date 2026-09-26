@@ -81,3 +81,8 @@ research §4b), so show-level metadata is the ceiling.
 - 2026-09-26 — L1 review finding: `HTTP.pm` logs every failed request at WARN (foundation, append-only), so "one WARN
   per run of failures" can't be met by callers. Decision: L2 (#5) adds an additive, caller-controlled failure log level
   option to `HTTP.pm` (e.g. `quiet => 1` → DEBUG) — flagged in its PR — and switches `NowPlaying.pm` to use it.
+- 2026-09-26 — L2 scope additions (orchestrator): HTTP.pm `quiet` option adopted by NowPlaying; fix blank live
+  title (`current_title` " " from empty icy-name) via a `Slim::Music::Info` title-change callback (public API, reviewed:
+  stable LMS 8.0–9.2, scoped to live URLs — KEEP). Review REQUEST_CHANGES: churn when [stream1, stream2] both queued
+  (re-push every ~1.3 s under Jivelite subscribe) and stuck poll state after async `_fetched` death / forgetTimer —
+  fix agent dispatched.
