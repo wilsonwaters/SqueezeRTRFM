@@ -10,8 +10,8 @@ research §4b), so show-level metadata is the ceiling.
 
 | ID | Summary | Size | Depends on | Status |
 |---|---|---|---|---|
-| L1 | Live menu: FM simulcast + Infinite Mix items with "On air: <show> · <time>" / "Next: …" lines; stream-URL discovery with safe fallback; `NowPlaying.pm` fetch/parse/cache | S | F1 | planned |
-| L2 | Live now-playing metadata: RemoteMetadata provider+parser for stream1 (show name, artwork, slot, next show); per-player polling scheduled at show changes; push to UIs; song info with description + next show; static metadata for stream2 | M | L1 | planned |
+| L1 | Live menu: FM simulcast + Infinite Mix items with "On air: <show> · <time>" / "Next: …" lines; stream-URL discovery with safe fallback; `NowPlaying.pm` fetch/parse/cache | S | F1 | done |
+| L2 | Live now-playing metadata: RemoteMetadata provider+parser for stream1 (show name, artwork, slot, next show); per-player polling scheduled at show changes; push to UIs; song info with description + next show; static metadata for stream2 | M | L1 | done |
 
 ### L1 — live menu
 - **`NowPlaying.pm`**: `fetch($cb)` → `GET https://rtrfm.com.au/wp-admin/admin-ajax.php?action=get_current_and_next_show`
@@ -86,3 +86,4 @@ research §4b), so show-level metadata is the ceiling.
   stable LMS 8.0–9.2, scoped to live URLs — KEEP). Review REQUEST_CHANGES: churn when [stream1, stream2] both queued
   (re-push every ~1.3 s under Jivelite subscribe) and stuck poll state after async `_fetched` death / forgetTimer —
   fix agent dispatched.
+- 2026-09-26 — Stream complete: all tasks merged (see PROGRESS.md for PRs); v1.0.0 released.

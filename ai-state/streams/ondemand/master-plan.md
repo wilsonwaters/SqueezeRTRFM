@@ -20,12 +20,12 @@ line-up; full 28-day window for daily shows with episodes lacking audio hidden.
 
 | ID | Summary | Size | Depends on | Status |
 |---|---|---|---|---|
-| O1 | Episode playback engine: `Restream.pm` rzz resolver + thin `rtrfm://` protocol handler (resolve at play time; seekable; direct + proxied; "no longer available" error; title/show/cover from metadata cache or URL fallback; favourites replay) | M (upper; highest technical risk) | F1 | planned |
-| O2 | Programs → Episodes browse: `Airnet.pm` (programs, episodes, 28-day window, titles) + `OnDemand.pm` menus emitting `rtrfm://` episode items and filling the metadata cache; empty/error states; caching | M | F1 (integrates with O1 at IC-1) | planned |
-| O3 | Episode track listings: `Tracklist.pm` (Airnet playlists, `approximateTime` offsets) + episode submenu (Play episode, description, "Track list (N)") | M | O2 (runtime playback also needs O1) | planned |
-| O4 | Current track during episode playback (position-based metadata, timers at track boundaries) + tracklist in song info | M | O1, O3 | planned |
-| O5 | Show artwork, descriptions, current line-up from rtrfm.com.au (`Shows.pm`), Airnet fallback | M | O2 | planned |
-| O6 | Stretch: full 28-day window for daily shows from inferred weekly slots; rzz availability check hiding episodes without audio; just-aired episodes | M | O1, O2 (soft: after O3) | planned |
+| O1 | Episode playback engine: `Restream.pm` rzz resolver + thin `rtrfm://` protocol handler (resolve at play time; seekable; direct + proxied; "no longer available" error; title/show/cover from metadata cache or URL fallback; favourites replay) | M (upper; highest technical risk) | F1 | done |
+| O2 | Programs → Episodes browse: `Airnet.pm` (programs, episodes, 28-day window, titles) + `OnDemand.pm` menus emitting `rtrfm://` episode items and filling the metadata cache; empty/error states; caching | M | F1 (integrates with O1 at IC-1) | done |
+| O3 | Episode track listings: `Tracklist.pm` (Airnet playlists, `approximateTime` offsets) + episode submenu (Play episode, description, "Track list (N)") | M | O2 (runtime playback also needs O1) | done |
+| O4 | Current track during episode playback (position-based metadata, timers at track boundaries) + tracklist in song info | M | O1, O3 | done |
+| O5 | Show artwork, descriptions, current line-up from rtrfm.com.au (`Shows.pm`), Airnet fallback | M | O2 | done |
+| O6 | Stretch: full 28-day window for daily shows from inferred weekly slots; rzz availability check hiding episodes without audio; just-aired episodes | M | O1, O2 (soft: after O3) | done |
 
 ### O1 — playback engine
 - **`Restream.pm`**: `GET https://restreams.rtrfm.com.au/rzz?n=<slug>&d=<date>` via `HTTP.pm` (JSON body despite
@@ -161,3 +161,4 @@ line-up; full 28-day window for daily shows with episodes lacking audio hidden.
   rtrfm URL). Web UI / `playlist_loop` titles unaffected. O4 should refresh the title (e.g. `setCurrentTitle` /
   `newmetadata`) once metadata is known. Review nit for O6 (#11): move `filterWindow`/empty check inside
   `_respond`'s eval in `_episodesFeed`.
+- 2026-09-26 — Stream complete: all tasks merged (see PROGRESS.md for PRs); v1.0.0 released.

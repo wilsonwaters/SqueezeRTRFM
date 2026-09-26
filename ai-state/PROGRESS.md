@@ -1,9 +1,8 @@
 # Project Progress
 
 ## Currently in flight
-- Phase 5–6: final system verification of v1.0.0 (clean LMS profile → install from GitHub repo.xml → smoke → all
-  user journeys in the Default web UI) — agent running.
-- Open follow-up (not blocking): #22 fetch show page + episodes concurrently in `_programMenu`.
+- Nothing. **v1.0.0 delivered 2026-09-26 — handoff in `ai-state/HANDOFF.md`, awaiting stakeholder acceptance on pi14.**
+- Open follow-up (optional): #22.
 
 ## Issue map
 | Task | Issue | Stream | Size | Depends on |
@@ -21,6 +20,7 @@
 | O6 | #11 | ondemand | M | #6, #7 (soft #8) |
 
 ## Last 5 completions
+- 2026-09-26 — **Final system verification PASS_WITH_NOTES** (clean LMS profile → install v1.0.0 from GitHub repo.xml → smoke 9/9 → all journeys pass in the Default web UI; two README wording fixes applied on main 871ffa8). Handoff written.
 - 2026-09-26 — **v1.0.0 released** (commit f109ac3 bump → release.yml run 36246453992): RTRFM-1.0.0.zip sha1 c2f1c3f0… = repo.xml `<sha>`; repo.xml commit aa16241 authored as Wilson Waters; release notes from CHANGELOG.
 - 2026-09-26 — #3 F3 merged (PR #23, squash e707f30): review REQUEST_CHANGES (blocker: t/14 pinned version 0.1.0 would fail the release run) → fixed by orchestrator; smoke.sh 9/9 PASS; all 11 planned tasks merged.
 - 2026-09-26 — #11 O6 merged (PR #21, squash 3d3274f): runtime PASS; review REQUEST_CHANGES → fixed (closure/timer + waiter cycles broken, waiter-first pump). All ondemand tasks done.
@@ -42,9 +42,7 @@
 - 2026-09-26 — Brief written (`ai-state/brief.md`).
 
 ## Next 3 to dispatch (in order)
-- Review + runtime verification for each wave-1 PR as it opens
-- IC-1 (O1+O2 browse→play) after both merge; release v0.1.0 via workflow after F2 merges
-- Wave 2: #5 L2 (after #4), #8 O3 + #10 O5 (after #7)
+- None — awaiting stakeholder acceptance.
 
 ## Active blockers
 - None. (pi14 unreachable from container — final acceptance by stakeholder; see OPEN-QUESTIONS §2.)

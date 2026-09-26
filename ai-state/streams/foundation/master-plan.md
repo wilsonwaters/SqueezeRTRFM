@@ -11,9 +11,9 @@ Deliver an installable, tested, releasable RTRFM plugin:
 
 | ID | Summary | Size | Depends on | Status |
 |---|---|---|---|---|
-| F1 | Installable skeleton: Radio-menu entry with playable stream1 item; frozen hook API + module stubs; `HTTP.pm`, `Util.pm`; unit-test harness; `scripts/check.sh`; CI | M (upper; review plan like an L) | – | planned |
-| F2 | Packaging & distribution: zip+sha1 build script, `repo.xml`, release workflow (tag + Release + repo.xml update via `GITHUB_TOKEN`), CI package checks, README install section; cut v0.1.0 | M | F1 | planned |
-| F3 | v1.0.0: README usage/troubleshooting, official-repo guide, `scripts/smoke.sh` JSON-RPC acceptance test, CHANGELOG, version bump → release, clean-LMS install from repo URL + smoke pass | M | F2, L2, O3 (+O4/O5/O6 if shipped) | planned |
+| F1 | Installable skeleton: Radio-menu entry with playable stream1 item; frozen hook API + module stubs; `HTTP.pm`, `Util.pm`; unit-test harness; `scripts/check.sh`; CI | M (upper; review plan like an L) | – | done |
+| F2 | Packaging & distribution: zip+sha1 build script, `repo.xml`, release workflow (tag + Release + repo.xml update via `GITHUB_TOKEN`), CI package checks, README install section; cut v0.1.0 | M | F1 | done |
+| F3 | v1.0.0: README usage/troubleshooting, official-repo guide, `scripts/smoke.sh` JSON-RPC acceptance test, CHANGELOG, version bump → release, clean-LMS install from repo URL + smoke pass | M | F2, L2, O3 (+O4/O5/O6 if shipped) | done |
 
 ### F1 — installable skeleton, shared helpers, harness
 
@@ -148,3 +148,4 @@ skin Radio menu shows "RTRFM 92.1" with icon, containing "RTRFM 92.1 Live"; play
   (b) `Tracklist::fetch` passes `quiet => 1` so the expected 400 for not-yet-published playlists isn't a WARN
   (small ondemand touch, sanctioned); (c) README documents known first-open latency (show page + availability
   checks, cached 24 h) and O6's 28-day window.
+- 2026-09-26 — Stream complete: all tasks merged (see PROGRESS.md for PRs); v1.0.0 released.
