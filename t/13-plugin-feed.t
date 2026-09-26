@@ -138,8 +138,13 @@ subtest 'default feed: the "RTRFM 92.1 Live" item' => sub {
 			url       => 'https://live.rtrfm.com.au/stream1',
 			on_select => 'play',
 			image     => 'plugins/RTRFM/html/images/icon.png',
+		}, {
+			name      => 'Programs',
+			type      => 'link',
+			url       => \&Plugins::RTRFM::OnDemand::_programsFeed,
+			image     => 'plugins/RTRFM/html/images/icon.png',
 		} ],
-		'one playable live item (OnDemand contributes nothing yet)'
+		'one playable live item, then the OnDemand "Programs" link'
 	);
 };
 
@@ -196,7 +201,7 @@ subtest 'a dying hook becomes one error item; the feed still returns' => sub {
 	is( $c->count, 1, 'both die: callback once' );
 	is_deeply( items_of($c), [ $ERROR_ITEM, $ERROR_ITEM ], 'both die: one error item each' );
 
-	$c = feed( live => undef );    # e.g. Live.pm failed to compile: no menuItems method
+	$c = feed( live => undef, ondemand => sync_hook() );    # e.g. Live.pm failed to compile: no menuItems method
 	is( $c->count, 1, 'missing hook method: callback once' );
 	is_deeply( items_of($c), [$ERROR_ITEM], 'missing hook method: error item' );
 };
@@ -216,7 +221,7 @@ subtest 'a hook calling back with undef or a non-array becomes an error item' =>
 	}
 
 	resetStubs();
-	my $c = feed( live => sub { $_[2]->() } );
+	my $c = feed( live => sub { $_[2]->() }, ondemand => sync_hook() );
 	is_deeply( items_of($c), [$ERROR_ITEM], 'callback with no arguments: error item' );
 };
 

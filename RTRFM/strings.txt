@@ -51,6 +51,9 @@ PLUGIN_RTRFM_PROGRAMS
 PLUGIN_RTRFM_NO_EPISODES
 	EN	No episodes available in the last 28 days
 
+PLUGIN_RTRFM_LOAD_FAILED
+	EN	Couldn't load from RTRFM – please try again later
+
 # === O3 === Episode track listings
 
 PLUGIN_RTRFM_PLAY_EPISODE
