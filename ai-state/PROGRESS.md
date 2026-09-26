@@ -1,6 +1,7 @@
 # Project Progress
 
 ## Currently in flight
+- Wave 2 (ondemand) implementation agents: #8 O3 `feat/O3-tracklists`, #10 O5 `feat/O5-show-artwork` (parallel; disjoint OnDemand.pm builders).
 - Wave 1 implementation agents (parallel worktrees): #2 F2 `feat/F2-packaging`, #4 L1 → PR #16 (review APPROVE; runtime verification running; t/13 conflict with #14 expected — second to merge reconciles).
 
 ## Issue map
