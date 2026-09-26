@@ -134,3 +134,7 @@ skin Radio menu shows "RTRFM 92.1" with icon, containing "RTRFM 92.1 Live"; play
 
 ## Changelog
 - 2026-09-26 — Initial master plan (stream-planning sub-agent); accepted by orchestrator, defaults applied to FQ1–FQ6.
+- 2026-09-26 — Spec-writing refinements (issues #2, #3): release workflow creates the GitHub Release first, verifies
+  the downloaded asset's sha1, then commits repo.xml (repair path if interrupted); committed repo.xml starts with a
+  placeholder sha; headless repo install via `scripts/lms-repo-install.sh` (form POST to
+  `/settings/server/plugins.html`); PR dry-run of the release build; CHANGELOG-based release notes.

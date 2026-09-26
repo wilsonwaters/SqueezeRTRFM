@@ -75,3 +75,6 @@ research §4b), so show-level metadata is the ceiling.
 
 ## Changelog
 - 2026-09-26 — Initial master plan (stream-planning sub-agent); accepted by orchestrator, defaults applied.
+- 2026-09-26 — Spec-writing refinements (issues #4, #5): Default skin shows the on-air line only on the item detail
+  view (line2 visible in Material/menu mode); 3 s menu deadline, 20 s fetch back-off, 60–900 s poll clamp, 300 s poll
+  when `current`/`next` missing; album text uses "·" separator.

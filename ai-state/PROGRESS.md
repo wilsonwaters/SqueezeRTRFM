@@ -2,7 +2,6 @@
 
 ## Currently in flight
 - #1 F1 skeleton — implementation agent dispatched (worktree, branch `feat/F1-skeleton`).
-- Spec writers filling issue bodies: #2 F2, #3 F3 · #4 L1, #5 L2 · #6–#11 O1–O6 (placeholders filed to fix numbering).
 
 ## Issue map
 | Task | Issue | Stream | Size | Depends on |
@@ -20,6 +19,7 @@
 | O6 | #11 | ondemand | M | #6, #7 (soft #8) |
 
 ## Last 5 completions
+- 2026-09-26 — All 11 task specs published to issues #1–#11; master-plan changelogs updated with spec refinements.
 - 2026-09-26 — Streams + master plans accepted (`ai-state/streams.md`, `ai-state/streams/*/master-plan.md`); 11 issues filed.
 - 2026-09-26 — Local LMS 9.1.1 + squeezelite test bed ready (`ai-state/RUNBOOK.md`); RTRFM stream1 (HE-AAC) plays on DevPlayer; test-bed lock added.
 - 2026-09-26 — RTRFM research merged (`ai-state/research/rtrfm-api.md`).

@@ -148,3 +148,11 @@ line-up; full 28-day window for daily shows with episodes lacking audio hidden.
 
 ## Changelog
 - 2026-09-26 — Initial master plan (stream-planning sub-agent); accepted by orchestrator, defaults applied.
+- 2026-09-26 — Spec-writing refinements (issues #6–#11, verified against live endpoints): (1) Default skin never shows
+  `line2`, so O2 puts the date in the episode `name`; O5 schedule verified with `menu:1` and repeated as a header item.
+  (2) O3 renders "pending" for episodes flagged `synthetic`; O6 only sets the flag (no O3 code edits). (3) O4 adds one
+  line to `OnDemand->init` to register its song-info provider (protocol handler loads lazily). (4) O5 builds the program
+  header via a new `_programMenu` wrapper around `_episodesFeed` (which stays O6's). (5) O2 fixes contracts: 
+  `Airnet::episodes` returns unfiltered data + pure `filterWindow`; feed callbacks are `{items=>[…]}`; program/episode
+  hash shapes defined. (6) New file `EpisodeWindow.pm` (O6) and token `PLUGIN_RTRFM_LOAD_FAILED` (O2, own section).
+  Measured retention ≈29 days; Airnet returns HTTP 500 for unknown slugs.
