@@ -3,8 +3,9 @@
 # static metadata, buildMeta (mapping and show boundary), the stream1 provider (first call,
 # push order, show metadata), poll scheduling (clamps, error and missing-data delays), show
 # changes, stop conditions, sharing (sync slaves, many calls, several masters, no client),
-# outages and the WARN rate, no progress-bar data, the stream title never blank, and a provider
-# that never dies.
+# outages and the WARN rate, no progress-bar data, the stream title never blank, a provider
+# that never dies, no churn with stream2 queued after stream1, and poll state that never gets
+# stuck (an update that dies, timers forgotten by LMS, a reconnected player).
 
 use strict;
 use warnings;
@@ -115,6 +116,11 @@ sub newmetadata {
 }
 
 sub current_title { Slim::Music::Info::getCurrentTitle( undef, shift ) }
+
+sub debug_logged {
+	my $re = shift;
+	return grep { $_->{message} =~ $re } Slim::Utils::Log->messages( level => 'DEBUG', category => 'plugin.rtrfm' );
+}
 
 sub warnings_logged { Slim::Utils::Log->messages( level => 'WARN', category => 'plugin.rtrfm' ) }
 
@@ -259,7 +265,7 @@ subtest 'no progress bar: no duration/secs, no duration/startOffset calls' => su
 	ok( !( grep { exists $_->{duration} || exists $_->{secs} } @results ), 'no provider result has duration or secs' );
 	is( scalar $p->playingSong->calls('duration'),    0, 'no $song->duration calls' );
 	is( scalar $p->playingSong->calls('startOffset'), 0, 'no $song->startOffset calls' );
-	is( scalar newmetadata($p), 3, 'pushes happened (first poll, restart after stream2, show change)' );
+	is( scalar newmetadata($p), 2, 'pushes happened (first poll, show change); the stream2 call while stream1 plays kept the poll' );
 	clearTime();
 };
 
@@ -626,6 +632,121 @@ subtest 'the provider never dies' => sub {
 
 	# the poll that failed is retried, not stuck
 	is( scalar lm_timers(), 1, 'failed poll: retry scheduled' );
+	clearTime();
+};
+
+subtest 'churn: stream1 playing, stream2 queued, alternating provider calls: one poll, no repeated push' => sub {
+	fresh_start();
+	serve( file => 'live/now-next-normal.json' );
+	my $p = player('p1');
+	$Slim::Player::Playlist::PLAYLISTS{p1} = [ $STREAM1, $STREAM2 ];    # stream1 plays, stream2 queued
+
+	# Jivelite's "status 0 2 subscribe:600" asks for both entries every ~1.3 s
+	my ( $max, $bad ) = ( 0, 0 );
+	for ( 1 .. 20 ) {
+		$bad++ unless _same( provide( $p, $STREAM1 ), $GRP ) && _same( provide( $p, $STREAM2 ), $MIX );
+		$max = scalar lm_timers() if lm_timers() > $max;
+		advanceTime(1.3);
+	}
+	is( $bad, 0, 'every call: the show for stream1, Infinite Mix for stream2' );
+	is( scalar requests(), 1, '20 status calls: one upstream request' );
+	is( scalar newmetadata($p), 1, 'one newmetadata (the first poll)' );
+	is( scalar $p->updateTimes, 1, 'currentPlaylistUpdateTime set once' );
+	is( scalar lm_timers(), 1, 'the poll timer survives the stream2 calls' );
+	is( $max, 1, 'never more than one timer' );
+	is( scalar debug_logged(qr/start polling/), 1, 'polling started once' );
+	is( scalar debug_logged(qr/stop polling/),  0, 'and never stopped' );
+
+	# stream2 plays: the poll stops; back to stream1 with the same show: no push again
+	$Slim::Player::Playlist::INDEX{p1} = 1;
+	provide( $p, $STREAM2 );
+	is( scalar lm_timers(), 0, 'stream2 plays: poll stopped' );
+	$Slim::Player::Playlist::INDEX{p1} = 0;
+	provide( $p, $STREAM1 ) for 1 .. 3;
+	is( scalar lm_timers(), 1, 'back on stream1: polling again' );
+	is( scalar newmetadata($p), 1, 'metadata unchanged since the last push: no newmetadata' );
+	is( scalar $p->updateTimes, 1, 'no currentPlaylistUpdateTime bump' );
+
+	# the show changes while stream2 plays: the restart pushes the new show
+	$Slim::Player::Playlist::INDEX{p1} = 1;
+	provide( $p, $STREAM2 );
+	reserve( file => 'live/now-next-after-change.json' );
+	advanceTime( $NEXT_START + 120 - time() );
+	$Slim::Player::Playlist::INDEX{p1} = 0;
+	is_deeply( provide( $p, $STREAM1 ), $HOMEGROWN, 'back on stream1 after the show change: the new show' );
+	is( scalar newmetadata($p), 2, 'changed metadata: one more newmetadata' );
+	is( scalar requests(), 2, 'one more request' );
+	clearTime();
+};
+
+subtest 'stuck state: an update that dies after an asynchronous fetch is retried after 30 s' => sub {
+	fresh_start();
+	serve( file => 'live/now-next-normal.json', defer => 1 );
+	my $p = player( 'p1', $STREAM1 );
+
+	provide( $p, $STREAM1 ) for 1 .. 4;
+	is( scalar debug_logged(qr/start polling/), 1, 'fetch in flight: the poll is live, not restarted' );
+
+	{
+		no warnings 'redefine';
+		my $dies = 1;
+		my $currentPlaylistUpdateTime = \&RTRFMTest::FakeClient::currentPlaylistUpdateTime;
+		local *RTRFMTest::FakeClient::currentPlaylistUpdateTime = sub {
+			if ( $dies && @_ > 1 ) { $dies = 0; die "push exploded\n" }
+			goto &$currentPlaylistUpdateTime;
+		};
+		Slim::Networking::SimpleAsyncHTTP->completeDeferred;
+	}
+
+	is( scalar( grep { $_->{message} =~ /push exploded/ } errors_logged() ), 1, 'the failure is logged at ERROR' );
+	ok( !( grep { $_->{message} =~ /callback failed/ } Slim::Utils::Log->messages ), 'caught by LiveMetadata, not left to NowPlaying' );
+	is( scalar newmetadata($p), 0, 'no newmetadata yet' );
+	is( delay_of(), 30, 'retry scheduled in 30 s' );
+
+	provide( $p, $STREAM1 ) for 1 .. 3;
+	is( scalar lm_timers(), 1, 'provider calls meanwhile: still one timer' );
+	advanceTime(29);
+	is( scalar newmetadata($p), 0, '29 s later: no push yet' );
+	advanceTime(1);
+	is( scalar newmetadata($p), 1, 'the retry pushed' );
+	is_deeply( $p->playingSong->pluginData('wmaMeta'), $GRP, 'wmaMeta set' );
+	is( scalar requests(), 1, 'answered from the cache: still one request' );
+	is( delay_of(), 900, 'back on the normal schedule' );
+	clearTime();
+};
+
+subtest 'stuck state: timers forgotten by LMS, a reconnected player: the next provider call restarts polling' => sub {
+	fresh_start();
+	serve( file => 'live/now-next-normal.json' );
+	my $p = player( 'p1', $STREAM1 );
+
+	provide( $p, $STREAM1 );
+	is( scalar lm_timers(), 1, 'polling' );
+
+	Slim::Utils::Timers::forgetTimer($p);    # as Slim::Player::Client::forgetClient does
+	is( scalar lm_timers(), 0, 'forgetTimer: no timer left' );
+	provide( $p, $STREAM1 );
+	is( scalar lm_timers(), 1, 'next provider call: polling again' );
+	is( scalar debug_logged(qr/stale poll state/), 1, 'the stale poll state is logged at DEBUG' );
+	is( scalar newmetadata($p), 1, 'unchanged metadata: no second push' );
+	advanceTime(900);
+	is( scalar requests(), 2, 'the restarted poll fetches' );
+
+	# the player reconnects: a new client object with the same id
+	Slim::Utils::Timers::forgetTimer($p);
+	my $p2 = player( 'p1', $STREAM1 );
+	provide( $p2, $STREAM1 );
+	my @t = lm_timers();
+	is( scalar @t, 1, 'reconnected player: one timer' );
+	is( $t[0] && $t[0]{obj}, $p2, 'keyed on the new client object' );
+	is( scalar newmetadata($p2), 1, 'the new client object gets its push' );
+
+	# ... even while the old object's timer is still pending
+	my $p3 = player( 'p1', $STREAM1 );
+	provide( $p3, $STREAM1 );
+	@t = lm_timers();
+	is( scalar @t, 1, 'old timer killed: one timer' );
+	is( $t[0] && $t[0]{obj}, $p3, 'keyed on the newest client object' );
 	clearTime();
 };
 

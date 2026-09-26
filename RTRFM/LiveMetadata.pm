@@ -27,14 +27,20 @@ package Plugins::RTRFM::LiveMetadata;
 #
 # Polling: while a player plays (or pauses) stream1, one Slim::Utils::Timers timer keyed on the
 # player (the master of a sync group) refreshes NowPlaying: at clamp(next.start + 60 - now,
-# 60, 900) s, 300 s when current or next is missing, 30 s after a failure. A poll stops (no
-# fetch, no new timer) once the player is stopped or plays something other than stream1; a
-# stream2 provider call stops it too. All players share NowPlaying's cache, so any number of
-# players costs one upstream request per refresh.
+# 60, 900) s, 300 s when current or next is missing, 30 s after a failure (including an update
+# that dies). A poll stops (no fetch, no new timer) once the player is stopped or plays
+# something other than stream1; a stream2 provider call stops it too, unless the player plays
+# stream1 (stream2 merely queued). A poll with neither a pending timer nor a fetch in flight
+# (e.g. LMS forgot the client's timers), or kept for another client object with the same id (a
+# reconnected player), is stale: the next stream1 provider call starts polling afresh. All
+# players share NowPlaying's cache, so any number of players costs one upstream request per
+# refresh.
 #
-# Push, when the metadata a player last got changes: setCurrentTitle (without a client, so it
-# doesn't count as a new song), the playing song's wmaMeta, currentPlaylistUpdateTime (the
-# Default web skin refreshes on it), then a 'newmetadata' notification (Material, players).
+# Push, when the metadata differs from what was last pushed to the player (kept on the player,
+# so stopping and restarting the poll doesn't re-push unchanged metadata): setCurrentTitle
+# (without a client, so it doesn't count as a new song), the playing song's wmaMeta,
+# currentPlaylistUpdateTime (the Default web skin refreshes on it), then a 'newmetadata'
+# notification (Material, players).
 #
 # Stream title (current_title): the streams send an empty icy-name header, which LMS stores as
 # the stream's current title (" "). The current-title change callback replaces any title LMS
@@ -49,6 +55,7 @@ package Plugins::RTRFM::LiveMetadata;
 use strict;
 use warnings;
 
+use Scalar::Util ();
 use Time::HiRes ();
 
 use Slim::Control::Request;
@@ -73,7 +80,8 @@ use constant SEPARATOR      => " \x{B7} ";
 
 my $log = logger('plugin.rtrfm');
 
-my %polls;           # master id => { master, pushed => last pushed metadata }
+my %polls;           # master id => { master, timer => its pending poll timer (weak ref),
+                     #                fetching => 1 while its fetch is in flight }
 our $settingTitle;   # true while we set a stream title ourselves
 my %errorsSeen;      # unexpected errors already logged at ERROR
 
@@ -164,9 +172,10 @@ sub _provide {
 	my $master = $client ? $client->master : undef;
 
 	if ( $stream == 2 ) {
-		_stop( $master, 'stream2 metadata requested' ) if $master && $polls{ $master->id };
+		# stream2 queued after the stream1 that plays (status asks for both): keep polling
+		_stop( $master, 'stream2 metadata requested' ) if $master && $polls{ $master->id } && !_playingStream1($master);
 	}
-	elsif ( $master && !$polls{ $master->id } && _playingStream1($master) ) {
+	elsif ( $master && _playingStream1($master) && !_polling($master) ) {
 		main::DEBUGLOG && $log->is_debug && $log->debug( 'Live metadata: start polling for ' . $master->id );
 		$polls{ $master->id } = { master => $master };
 		_poll($master);
@@ -220,16 +229,32 @@ sub _playingStream1 {
 	return ( streamOf($url) || 0 ) == 1 ? $url : undef;
 }
 
+# True while $master has a live poll: its timer pending or its fetch in flight. Otherwise any
+# poll state for its id is stale (its timer was forgotten, say, or it belongs to an earlier
+# client object with the same id) and is dropped.
+sub _polling {
+	my $master = shift;
+
+	my $state = $polls{ $master->id } or return 0;
+	return 1 if $state->{master} == $master && ( $state->{timer} || $state->{fetching} );
+
+	_stop( $state->{master}, 'stale poll state (no timer and no fetch in flight, or another client object)' );
+	return 0;
+}
+
 sub _poll {
 	my $master = shift;
 
 	Slim::Utils::Timers::killTimers( $master, \&_poll );
 
 	my $state = $polls{ $master->id } or return;
+	return unless $state->{master} == $master;
+	delete $state->{timer};
 
 	eval {
 		if ( _playingStream1($master) ) {
 			main::DEBUGLOG && $log->is_debug && $log->debug( 'Live metadata: polling the show info for ' . $master->id );
+			$state->{fetching} = 1;
 			Plugins::RTRFM::NowPlaying->fetch( sub { _fetched( $master, $state, @_ ) } );
 		}
 		else {
@@ -238,13 +263,29 @@ sub _poll {
 		1;
 	} or do {
 		_error( 'Live metadata poll failed', $@ );
+		delete $state->{fetching};
 		_schedule( $master, ERROR_DELAY ) if _isCurrent( $master, $state );
 	};
 
 	return;
 }
 
+# NowPlaying->fetch's callback, synchronous or not. Never dies: an update that fails is retried
+# after ERROR_DELAY rather than leaving the poll without a timer.
 sub _fetched {
+	my ( $master, $state, @result ) = @_;
+
+	delete $state->{fetching};
+
+	eval { _update( $master, $state, @result ); 1 } or do {
+		_error( 'Live metadata update failed', $@ );
+		_schedule( $master, ERROR_DELAY ) if _isCurrent( $master, $state );
+	};
+
+	return;
+}
+
+sub _update {
 	my ( $master, $state, $info ) = @_;
 
 	# stopped, or stopped and started again, while the request was in flight
@@ -261,9 +302,9 @@ sub _fetched {
 	my $now  = time();
 	my $meta = buildMeta( $info, $now );
 
-	if ( _changed( $state->{pushed}, $meta ) ) {
+	if ( _changed( $master->pluginData('liveMetaPushed'), $meta ) ) {
 		_push( $master, $url, $meta );
-		$state->{pushed} = $meta;
+		$master->pluginData( liveMetaPushed => $meta );
 	}
 	else {
 		main::DEBUGLOG && $log->is_debug && $log->debug( 'Live metadata: unchanged for ' . $master->id . ', no push' );
@@ -293,7 +334,13 @@ sub _schedule {
 	my ( $master, $delay ) = @_;
 
 	Slim::Utils::Timers::killTimers( $master, \&_poll );
-	Slim::Utils::Timers::setTimer( $master, Time::HiRes::time() + $delay, \&_poll );
+	my $timer = Slim::Utils::Timers::setTimer( $master, Time::HiRes::time() + $delay, \&_poll );
+
+	# weak: undef once the timer has fired or been killed (also by LMS's forgetTimer)
+	if ( my $state = $polls{ $master->id } ) {
+		$state->{timer} = $timer;
+		Scalar::Util::weaken( $state->{timer} );
+	}
 
 	main::DEBUGLOG && $log->is_debug && $log->debug( sprintf( 'Live metadata: next poll for %s in %d s', $master->id, $delay ) );
 	return;
