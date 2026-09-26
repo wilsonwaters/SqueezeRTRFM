@@ -56,8 +56,8 @@ also the text of its GitHub Release (see [RELEASING.md](RELEASING.md)).
 - RTRFM keeps episode audio for 28 days. Older episodes aren't listed, and an older favourite
   shows "This episode is no longer available".
 - A new episode's audio is available about 6 minutes after the show ends. Its details and track
-  list come from RTRFM's Airnet program guide, which usually publishes them later, often the
-  next day.
+  list come from RTRFM's Airnet program guide, which publishes them later, sometimes not until
+  the next day.
 - The current track during an episode is based on approximate times, so it can change a little
   early or late.
 - A daily show's older episodes are found from its regular weekly time slots. A weekday on

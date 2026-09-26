@@ -114,7 +114,7 @@ subtest 'README.md' => sub {
 	like( $np, qr/track playing at that point/,               'Now playing: current track during episodes' );
 	like( $np, qr/\*\*Episodes stay available for 28 days\.\*\*/,               'limits: 28-day retention' );
 	like( $np, qr/\*\*New episodes appear about 6 minutes after a show ends\*\*/, 'limits: about 6 minutes after a show ends' );
-	like( $np, qr/come from Airnet.*typically the next day/s,                     'limits: Airnet details and track lists possibly next day' );
+	like( $np, qr/come from Airnet.*later than the audio.*not until the next day/s, 'limits: Airnet details and track lists possibly next day' );
 	like( $np, qr/"\Q$EN{PLUGIN_RTRFM_EPISODE_UNAVAILABLE}\E"/,                   'limits: the "no longer available" message' );
 	like( $np, qr/first time can take several seconds/,                          'limits: first-open latency' );
 	like( $np, qr/regular weekly time slots/,                                    'limits: slot inference for daily shows' );

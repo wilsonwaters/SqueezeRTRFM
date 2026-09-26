@@ -22,8 +22,8 @@ four weeks, with its track list.
   list**.
 - **Current track:** while an episode plays, Now Playing shows the track playing at that point
   in the show.
-- Standard LMS menus, so everything is in the web interface, apps and players that show the
-  LMS Radio menu.
+- Standard LMS menus, so apps and players that show the LMS Radio menu get the same items
+  (tested in the web interface; see [Compatibility](#compatibility)).
 
 ## Disclaimer
 
@@ -106,14 +106,14 @@ Each episode plays straight away from its play button. Open it (click its name) 
 
 ![An episode's track list, one row per track with its time into the show](docs/images/rtrfm-track-list.png)
 
-Episodes can be sought: drag the progress bar, or skip forward and back as with any other
-track.
+Episodes can be sought: drag the progress bar in the web interface, or use your player's or
+app's seek controls.
 
 ### Favourites
 
-Save **RTRFM 92.1 Live**, **RTRFM Infinite Mix** or any **episode** as a favourite with the
-favourite (**Save to Favorites**) button in the web interface, or your player's or app's "add
-to favourites" action. A live favourite plays the stream directly. An episode favourite keeps
+Save **RTRFM 92.1 Live**, **RTRFM Infinite Mix** or any **episode** as a favourite with its heart
+button (**Save to Favorites**) in the web interface, or your player's or app's "add to
+favourites" action. A live favourite plays the stream directly. An episode favourite keeps
 working after LMS restarts, until RTRFM removes the audio 28 days after the show; after that it
 says "This episode is no longer available".
 
@@ -152,10 +152,10 @@ an episode has **Episode notes** (when there are any) and **Track list (N)**.
 - **New episodes appear about 6 minutes after a show ends**, when RTRFM publishes the audio.
   The plugin lists a just-aired episode about 10 minutes after the show's end, named
   "*date* – *Show*".
-- **Episode details and track lists come from Airnet**, RTRFM's program guide, and usually
-  appear later, typically the next day. Until then a just-aired episode has no notes, and its
-  track list says "Track list not yet available". Presenters sometimes edit a track list after
-  the show.
+- **Episode details and track lists come from Airnet**, RTRFM's program guide, and appear
+  later than the audio: sometimes within a few hours, sometimes not until the next day. Until
+  then a just-aired episode has no notes, and instead of its track list it says
+  "Track list not yet available". Presenters sometimes edit a track list after the show.
 - **Older episodes of daily shows are found from their regular weekly time slots**, which the
   plugin works out from the show's recent episodes. A weekday on which a show appeared only
   once in its recent episodes (say, an occasional extra Tuesday) may not be listed for older
@@ -164,7 +164,8 @@ an episode has **Episode notes** (when there are any) and **Track list (N)**.
   the list with "· Availability unknown" added to its second line.
 - **Opening a program for the first time can take several seconds** (about 8–12 s on a slow
   connection), while the plugin loads the show's page and checks which episodes still have
-  audio. Both are cached for 24 hours, so it opens straight away after that.
+  audio. The results are cached (the show page and the checks for up to 24 hours), so later
+  opens are quick.
 - The **Programs** list is cached for up to a day, so a change in RTRFM's line-up can take that
   long to show.
 
