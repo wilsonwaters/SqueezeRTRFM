@@ -21,3 +21,8 @@ _(none yet)_
    be cut by a GitHub Actions workflow (workflow_dispatch or version-bump trigger) using `GITHUB_TOKEN`.
    A probe branch `feat/push-probe` (identical to `main` at 71a09c1) could not be deleted — stakeholder can
    delete it in the GitHub UI.
+5. **Commit authorship** (2026-09-26, stakeholder instruction) — All commits, PRs and issues are authored as
+   Wilson Waters <wilsonwaters@users.noreply.github.com> with no tool/vendor attribution trailers or footers.
+   The first 11 commits on `main` after the initial commit (71a09c1 … 0701d66) were made under a different author
+   with attribution trailers; correcting them requires rewriting `main` and a force-push, which is left to the
+   stakeholder to authorise or perform. PRs are squash-merged with an explicit clean commit message.

@@ -47,7 +47,7 @@ Squeezebox users listen to **RTRFM 92.1** (Perth community radio, <https://rtrfm
 
 ## Environment & verification (adapted to this session)
 
-- Work runs in a Claude Code cloud container. The stakeholder's LMS (pi14) is **not reachable** from the
+- Work runs in a cloud development container. The stakeholder's LMS (pi14) is **not reachable** from the
   container (egress proxy blocks plain HTTP on :9000), so runtime/system verification runs against a
   **local LMS + squeezelite instance inside the container** (see `ai-state/RUNBOOK.md`). The stakeholder
   performs final acceptance on pi14.

@@ -65,7 +65,7 @@ To run with extra LMS options, e.g. debug logging from startup:
 ### What the sandbox allows (measured)
 
 - **Direct TCP egress works, but it's transparently intercepted by an Envoy egress gateway.** TLS is
-  re-terminated with the "Anthropic Egress Gateway" CA, and **every HTTP/1.0 request gets
+  re-terminated with the egress gateway's own CA, and **every HTTP/1.0 request gets
   `426 Upgrade Required`**, over plain HTTP and over intercepted TLS alike.
 - **LMS speaks HTTP/1.0 everywhere.** `Slim::Networking::Async::HTTP` forces 1.0, and
   `Slim::Player::Protocols::HTTP::requestString` hardcodes `HTTP/1.0`. squeezelite sends the request
@@ -107,7 +107,7 @@ To run with extra LMS options, e.g. debug logging from startup:
   `AnyEvent::DNS`, IPv4 only. Fake proxychains IPs would break direct streaming, because LMS passes
   the resolved IP to squeezelite. The helper recovers the hostname from SNI or the Host header.
 - **TLS verification stays on** (`insecureHTTPS: 0`). The Ubuntu `IO::Socket::SSL` uses the system
-  trust store, which includes the Anthropic proxy and gateway CAs, and :443 tunnels carry the real
+  trust store, which includes the proxy and gateway CAs, and :443 tunnels carry the real
   certificates anyway.
 - The proxychains `localnet` entries exclude 127/8, the RFC1918 ranges and the container's own IPs
   (`hostname -I`). So LMS can still reach local services, e.g. a local `repo.xml` server.
