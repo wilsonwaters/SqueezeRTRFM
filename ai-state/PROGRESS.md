@@ -2,7 +2,6 @@
 
 ## Currently in flight
 **RESUMED 2026-09-26** (paused ~05:10 for stakeholder quota).
-- #9 O4 → PR #20: runtime PASS; review REQUEST_CHANGES (major: track list TTL expires mid-episode for recent shows; major: polls cancel boundary notifications; minor: onStream position after seek/advance) → fix agent running.
 - #11 O6 `feat/O6-28-day-window` (stretch): implementation dispatched in parallel.
 - Next: F2 review + runtime verify; merge L1 → dispatch L2; merge O3 → dispatch O4, O6; release v0.1.0 after F2.
 
@@ -22,6 +21,7 @@
 | O6 | #11 | ondemand | M | #6, #7 (soft #8) |
 
 ## Last 5 completions
+- 2026-09-26 — #9 O4 merged (PR #20, squash 240dc05): runtime PASS; review REQUEST_CHANGES → fixed (track list kept on song for whole stream; polls no longer cancel boundary notifications; onStream position from seekdata; notify only on track change).
 - 2026-09-26 — #5 L2 merged (PR #18, squash f8f34ef): review REQUEST_CHANGES → fixed (no re-push churn with stream2 queued; polls recover), title-callback approved; runtime PASS (show name/artwork/slot/next in Now Playing, never blank, Show info, light polling, ondemand + other stations unaffected). Live stream complete.
 - 2026-09-26 — #10 O5 merged (PR #19, squash edbaef3): review APPROVE (orchestrator merged main, fixed t/38 for O3's link rows, added 768w + sort tests), runtime PASS (46-show line-up with artwork, program header; cold Programs load 5.6 s).
 - 2026-09-26 — #8 O3 merged (PR #17, squash aff0b0d): review APPROVE, runtime PASS; **IC-2 PASS** (track lists visible in web UI, all rows match Airnet) → brief criterion 3 met. **All 5 brief success criteria now met on main.**
