@@ -7,7 +7,8 @@ REPO_DIR="$(cd "$DEV_DIR/.." && pwd)"
 
 LMS_VERSION="${LMS_VERSION:-9.1.1}"
 LMS_TARBALL_URL="${LMS_TARBALL_URL:-https://downloads.lms-community.org/LyrionMusicServer_v${LMS_VERSION}/lyrionmusicserver-${LMS_VERSION}.tgz}"
-LMS_TARBALL_MD5="${LMS_TARBALL_MD5:-11a05b8a79515fb4dfb303c5e0abc6e1}"   # md5 for 9.1.1 (from latest.xml)
+# md5 published in https://lms-community.github.io/lms-server-repository/latest.xml ("src" entry)
+if [[ -z "${LMS_TARBALL_MD5:-}" && "$LMS_VERSION" == "9.1.1" ]]; then LMS_TARBALL_MD5=11a05b8a79515fb4dfb303c5e0abc6e1; fi
 
 LMS_BASE="${LMS_BASE:-/opt/lms-dev}"                 # everything LMS-related lives here
 LMS_HOME="${LMS_HOME:-$LMS_BASE/server}"              # symlink -> lyrionmusicserver-<ver>
@@ -49,15 +50,19 @@ pid_alive() {
   [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null
 }
 
-# stop_pidfile <pidfile> <label> [timeout_s] : SIGTERM, wait, then SIGKILL
+# stop_pidfile <pidfile> <label> [timeout_s] [group] : SIGTERM (to the whole process
+# group if 4th arg is "group"), wait, SIGKILL if needed, then sweep the process group
+# (spawn_detached makes the pid the pgid).
 stop_pidfile() {
-  local f="$1" label="$2" t="${3:-20}" pid i
+  local f="$1" label="$2" t="${3:-20}" mode="${4:-}" pid i
   if ! pid_alive "$f"; then rm -f "$f"; return 0; fi
   pid="$(cat "$f")"
   log "stopping $label (pid $pid)"
-  kill "$pid" 2>/dev/null || true
+  if [[ "$mode" == group ]]; then kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  else kill -TERM "$pid" 2>/dev/null || true; fi
   for ((i = 0; i < t * 4; i++)); do kill -0 "$pid" 2>/dev/null || break; sleep 0.25; done
-  if kill -0 "$pid" 2>/dev/null; then log "$label did not exit, sending SIGKILL"; kill -9 "$pid" 2>/dev/null || true; fi
+  if kill -0 "$pid" 2>/dev/null; then log "$label did not exit, sending SIGKILL"; kill -KILL "$pid" 2>/dev/null || true; fi
+  kill -TERM -- "-$pid" 2>/dev/null || true
   rm -f "$f"
 }
 
@@ -99,6 +104,16 @@ write_proxychains_conf() {
   } > "$PROXYCHAINS_CONF"
 }
 
+# spawn_detached <pidfile> <logfile> <cmd...> : run cmd in its own session (survives the
+# calling shell), stdout/stderr appended to logfile; pidfile gets the real pid, which is
+# also the process-group id (so stop can kill children too).
+spawn_detached() {
+  local pidfile="$1" logfile="$2"; shift 2
+  rm -f "$pidfile"
+  setsid -f bash -c 'echo $$ >"$0"; exec "$@"' "$pidfile" "$@" >>"$logfile" 2>&1 </dev/null
+  wait_until 5 test -s "$pidfile" || die "failed to spawn $1"
+}
+
 require_installed() {
   [[ -f "$LMS_HOME/slimserver.pl" ]] || die "LMS not installed at $LMS_HOME - run dev/setup.sh"
   local c
@@ -111,8 +126,8 @@ require_installed() {
 start_egress() {
   if pid_alive "$EGRESS_PIDFILE"; then log "egress-proxy already running (pid $(cat "$EGRESS_PIDFILE"))"; return 0; fi
   log "starting egress-proxy on 127.0.0.1:$EGRESS_PORT (upstream ${HTTPS_PROXY:-DIRECT})"
-  EGRESS_PORT="$EGRESS_PORT" setsid nohup node "$DEV_DIR/egress-proxy.mjs" >>"$LOG_DIR/egress-proxy.log" 2>&1 </dev/null &
-  echo $! >"$EGRESS_PIDFILE"
+  EGRESS_PORT="$EGRESS_PORT" spawn_detached "$EGRESS_PIDFILE" "$LOG_DIR/egress-proxy.log" \
+    node "$DEV_DIR/egress-proxy.mjs"
   wait_until 10 curl -s -o /dev/null --noproxy '*' "http://127.0.0.1:$EGRESS_PORT/" || die "egress-proxy did not start; see $LOG_DIR/egress-proxy.log"
 }
 stop_egress() { stop_pidfile "$EGRESS_PIDFILE" egress-proxy 5; }
@@ -123,16 +138,12 @@ start_lms() {
   write_proxychains_conf
   mkdir -p "$LMS_PREFS" "$LMS_CACHE" "$LMS_PLUGIN_DIR"
   log "starting LMS $LMS_VERSION on http://localhost:$LMS_PORT (logs: $LOG_DIR/server.log)"
-  (
-    cd "$LMS_HOME"
-    # --user root: LMS refuses plain root and would switch to 'nobody' (can't write our dirs).
-    LANG=C.UTF-8 LC_ALL=C.UTF-8 setsid nohup proxychains4 -q -f "$PROXYCHAINS_CONF" \
-      /usr/bin/perl slimserver.pl --user root \
+  # --user root: LMS refuses plain root and would switch to 'nobody' (can't write our dirs).
+  # shellcheck disable=SC2086
+  ( cd "$LMS_HOME" && LANG=C.UTF-8 LC_ALL=C.UTF-8 spawn_detached "$LMS_PIDFILE" "$LOG_DIR/lms-stdout.log" \
+      proxychains4 -q -f "$PROXYCHAINS_CONF" /usr/bin/perl slimserver.pl --user root \
       --prefsdir "$LMS_PREFS" --cachedir "$LMS_CACHE" --logdir "$LOG_DIR" \
-      --pidfile "$LMS_PIDFILE" --httpport "$LMS_PORT" --charset utf8 \
-      ${LMS_EXTRA_ARGS:-} >>"$LOG_DIR/lms-stdout.log" 2>&1 </dev/null &
-    echo $! >"$LMS_PIDFILE"
-  )
+      --pidfile "$LMS_PIDFILE" --httpport "$LMS_PORT" --charset utf8 ${LMS_EXTRA_ARGS:-} )
   if ! wait_until "${LMS_START_TIMEOUT:-120}" rpc_up; then
     tail -n 30 "$LOG_DIR/lms-stdout.log" >&2 || true
     die "LMS JSON-RPC did not answer on $LMS_RPC_URL"
@@ -152,28 +163,18 @@ start_player() {
   #              throttle the pipe to exactly real time (R * 2ch * 2 bytes per second)
   # -Z 192000  : still advertise a realistic max rate to LMS (else LMS rejects 48kHz streams)
   # proxychains: lets squeezelite fetch directly-streamed URLs (LMS's default) too.
-  setsid nohup bash -c "proxychains4 -q -f '$PROXYCHAINS_CONF' squeezelite \
+  spawn_detached "$SQZ_PIDFILE" "$LOG_DIR/squeezelite.log" bash -c "proxychains4 -q -f '$PROXYCHAINS_CONF' squeezelite \
       -n '$PLAYER_NAME' -m '$PLAYER_MAC' -s 127.0.0.1 -o - -a 16 \
       -r $PLAYER_PCM_RATE-$PLAYER_PCM_RATE -u mX -Z 192000 \
-      -d all=info -f '$LOG_DIR/squeezelite.log' | pv -q -L $PLAYER_BYTES_PER_SEC >/dev/null" \
-    >>"$LOG_DIR/squeezelite.log" 2>&1 </dev/null &
-  echo $! >"$SQZ_PIDFILE"
+      -d all=info -f '$LOG_DIR/squeezelite.log' | pv -q -L $PLAYER_BYTES_PER_SEC >/dev/null"
   if ! wait_until 30 player_connected; then
     log "WARNING: $PLAYER_NAME not visible in LMS players list yet; see $LOG_DIR/squeezelite.log"
     return 1
   fi
   log "$PLAYER_NAME connected"
 }
-# the squeezelite wrapper is a process-group leader (setsid): kill the whole group
-stop_player() {
-  if pid_alive "$SQZ_PIDFILE"; then
-    local pid; pid="$(cat "$SQZ_PIDFILE")"
-    log "stopping squeezelite (pgid $pid)"
-    kill -TERM -- "-$pid" 2>/dev/null || true
-    wait_until 10 bash -c "! kill -0 -- -$pid 2>/dev/null" || kill -KILL -- "-$pid" 2>/dev/null || true
-  fi
-  rm -f "$SQZ_PIDFILE"
-}
+# the squeezelite wrapper (bash | pv) is a process-group leader: signal the whole group
+stop_player() { stop_pidfile "$SQZ_PIDFILE" squeezelite 10 group; }
 player_connected() {
   rpc_raw - '["players",0,50]' 2>/dev/null | jq -e --arg m "$PLAYER_MAC" \
     '.result.players_loop[]? | select(.playerid == $m and .connected == 1)' >/dev/null
